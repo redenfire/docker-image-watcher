@@ -199,23 +199,23 @@ func (app *App) checkAll() {
 			status.Image = cleanImage + ":latest"
 		}
 
-		localDigest, err := getLocalDigest(c.Image)
-		if err != nil {
+		localDigest, localErr := getLocalDigest(c.Image)
+		if localErr != nil {
 			status.LocalDigest = "unknown"
 		} else {
 			status.LocalDigest = shortenDigest(localDigest)
 		}
 
-		remoteDigest, err := getRemoteDigest(status.Image)
-		if err != nil {
+		remoteDigest, remoteErr := getRemoteDigest(status.Image)
+		if remoteErr != nil {
 			status.RemoteDigest = "unknown"
 		} else {
 			status.RemoteDigest = shortenDigest(remoteDigest)
 		}
 
-		if status.LocalDigest == "unknown" || status.RemoteDigest == "unknown" {
+		if localErr != nil || remoteErr != nil {
 			status.Status = "unknown"
-		} else if status.LocalDigest != status.RemoteDigest {
+		} else if localDigest != remoteDigest {
 			status.Status = "outdated"
 		} else {
 			status.Status = "uptodate"
