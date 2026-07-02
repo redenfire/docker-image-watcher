@@ -1,7 +1,6 @@
 services:
   image-watch:
     image: ghcr.io/redenfire/docker-image-watcher:latest
-    build: .
     container_name: image-watch
     restart: unless-stopped
     ports:
