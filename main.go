@@ -178,54 +178,75 @@ func (app *App) checkAll() {
 	}
 	app.mu.Unlock()
 
-	var results []ImageStatus
+	type containerResult struct {
+		status ImageStatus
+	}
+
+	sem := make(chan struct{}, 5)
+	resultsCh := make(chan containerResult, len(containers))
+	var wg sync.WaitGroup
+
 	for _, c := range containers {
-		// skip containers with untagged image IDs
 		if strings.HasPrefix(c.Image, "sha256:") {
 			continue
 		}
-		status := ImageStatus{
-			ContainerID:   c.ID[:12],
-			ContainerName: strings.TrimPrefix(c.Names[0], "/"),
-			Image:         c.Image,
-		}
-		cleanImage := c.Image
-		if i := strings.Index(cleanImage, "@"); i >= 0 {
-			cleanImage = cleanImage[:i]
-		}
-		if _, _, ok := strings.Cut(cleanImage, ":"); ok {
-			status.Image = cleanImage
-		} else {
-			status.Image = cleanImage + ":latest"
-		}
+		wg.Add(1)
+		go func(c dockerContainer) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
 
-		localDigest, err := getLocalDigest(c.Image)
-		if err != nil {
-			status.LocalDigest = "unknown"
-		} else {
-			status.LocalDigest = shortenDigest(localDigest)
-		}
+			status := ImageStatus{
+				ContainerID:   c.ID[:12],
+				ContainerName: strings.TrimPrefix(c.Names[0], "/"),
+				Image:         c.Image,
+			}
+			cleanImage := c.Image
+			if i := strings.Index(cleanImage, "@"); i >= 0 {
+				cleanImage = cleanImage[:i]
+			}
+			if _, _, ok := strings.Cut(cleanImage, ":"); ok {
+				status.Image = cleanImage
+			} else {
+				status.Image = cleanImage + ":latest"
+			}
 
-		remoteDigest, err := getRemoteDigest(status.Image)
-		if err != nil {
-			status.RemoteDigest = "unknown"
-		} else {
-			status.RemoteDigest = shortenDigest(remoteDigest)
-		}
+			localDigest, localErr := getLocalDigest(c.Image)
+			if localErr != nil {
+				status.LocalDigest = "unknown"
+			} else {
+				status.LocalDigest = shortenDigest(localDigest)
+			}
 
-		if status.LocalDigest == "unknown" || status.RemoteDigest == "unknown" {
-			status.Status = "unknown"
-		} else if status.LocalDigest != status.RemoteDigest {
-			status.Status = "outdated"
-		} else {
-			status.Status = "uptodate"
-		}
+			remoteDigest, remoteErr := getRemoteDigest(status.Image)
+			if remoteErr != nil {
+				status.RemoteDigest = "unknown"
+			} else {
+				status.RemoteDigest = shortenDigest(remoteDigest)
+			}
 
-		if auto, ok := autoMap[c.ID[:12]]; ok {
-			status.AutoUpdate = auto
-		}
+			if localErr != nil || remoteErr != nil {
+				status.Status = "unknown"
+			} else if localDigest != remoteDigest {
+				status.Status = "outdated"
+			} else {
+				status.Status = "uptodate"
+			}
 
-		results = append(results, status)
+			if auto, ok := autoMap[c.ID[:12]]; ok {
+				status.AutoUpdate = auto
+			}
+
+			resultsCh <- containerResult{status: status}
+		}(c)
+	}
+
+	wg.Wait()
+	close(resultsCh)
+
+	var results []ImageStatus
+	for r := range resultsCh {
+		results = append(results, r.status)
 	}
 
 	app.mu.Lock()
