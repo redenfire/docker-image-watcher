@@ -8,7 +8,7 @@ Minimal Docker image update monitor with a web UI. Checks running containers aga
 docker run -d \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -p 8099:8080 \
-  ghcr.io/<your-user>/image-watch:latest
+  ghcr.io/redenfire/docker-image-watcher:latest
 ```
 
 Open `http://localhost:8099`.
@@ -37,7 +37,7 @@ Open `http://localhost:8099`.
 ```bash
 docker buildx build \
   --platform linux/amd64,linux/arm64,linux/arm/v7 \
-  -t ghcr.io/<your-user>/image-watch:latest --push .
+  -t ghcr.io/redenfire/docker-image-watcher:latest --push .
 ```
 
 ## Env
