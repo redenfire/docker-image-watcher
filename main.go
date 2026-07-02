@@ -422,9 +422,9 @@ func (app *App) loadAuto() {
 func saveAuto(auto map[string]bool, p string) {
 	data, _ := json.Marshal(auto)
 	if i := strings.LastIndex(p, "/"); i > 0 {
-		os.MkdirAll(p[:i], 0755)
+		os.MkdirAll(p[:i], 0700)
 	}
-	os.WriteFile(p, data, 0644)
+	os.WriteFile(p, data, 0600)
 }
 
 func shortenDigest(d string) string {
