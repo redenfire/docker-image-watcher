@@ -1,49 +1,148 @@
-# Image Watch
+# 🐳 Image Watch
 
-Minimal Docker image update monitor with a web UI. Checks running containers against their registry, shows outdated images, and can auto-update.
+Minimal Docker image update monitor with web UI. Checks running containers against their registry, shows outdated images, and can auto-update.
 
-## Usage
+## Quick Start
 
 ```bash
 docker run -d \
+  --name image-watch \
   -v /var/run/docker.sock:/var/run/docker.sock \
+  -v image-watch-data:/data \
   -p 8099:8080 \
   ghcr.io/redenfire/docker-image-watcher:latest
 ```
 
-Open `http://localhost:8099`.
+Open [http://localhost:8099](http://localhost:8099).
+
+Or use Docker Compose:
+
+```yaml
+services:
+  image-watch:
+    image: ghcr.io/redenfire/docker-image-watcher:latest
+    container_name: image-watch
+    restart: unless-stopped
+    ports:
+      - "8099:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - image-watch-data:/data
+    environment:
+      - PORT=8080
+      - DOCKER_SOCK=/var/run/docker.sock
+      - AUTO_FILE=/data/auto-update.json
+
+volumes:
+  image-watch-data:
+```
 
 ## Features
 
-- Lists all running containers with local vs remote digest comparison
-- Supports any OCI registry (Docker Hub, GHCR, quay.io, self-hosted)
-- One-click **Update** with live progress bar
-- Per-container **Auto-update** toggle (persisted on disk)
-- Auto-update checks every 10 minutes with 5 min cooldown
-- Multi-arch: `linux/amd64`, `linux/arm64`, `linux/arm/v7`
+- Lists running containers with local vs. remote digest comparison
+- Supports OCI-compatible registries including Docker Hub, GHCR, Quay, and self-hosted registries
+- One-click update with live progress in web UI
+- Per-container auto-update toggle persisted to disk
+- Background check every 10 minutes with 5-minute auto-update cooldown
+- Multi-arch container build support for `linux/amd64`, `linux/arm64`, `linux/arm/v7`
+
+## How It Works
+
+Three Go modules work together:
+
+| Module | Responsibility |
+|---|---|
+| `main.go` | HTTP server, routes, periodic checks, auto-update state |
+| `docker.go` | Docker Engine API client, image pulls, container recreation |
+| `registry.go` | Registry manifest lookup and token-based auth |
+
+Check cycle:
+
+```text
+main.go:checkAll()
+-> docker.go:listContainers()
+-> for each container:
+   -> docker.go:getLocalDigest()
+   -> registry.go:getRemoteDigest()
+   -> compare digests
+-> refresh ImageStatus list
+-> auto-update outdated containers when enabled
+```
+
+Update cycle:
+
+```text
+main.go:updateContainer()
+-> docker.go:pullImageStream()
+-> docker.go:recreateContainer()
+-> main.go:checkAll()
+```
 
 ## API
 
-| Endpoint | Method | Description |
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/images` | List tracked running containers |
+| `POST /api/images/{id}/update` | Trigger async pull + recreate |
+| `POST /api/images/{id}/auto-update` | Toggle per-container auto-update |
+| `GET /api/images/{id}/progress` | Read pull/update progress |
+| `GET /health` | Health check |
+
+Full reference: [`docs/project/API.md`](docs/project/API.md)
+
+## Configuration
+
+| Variable | Default | Purpose |
 |---|---|---|
-| `/api/images` | GET | List monitored images with status |
-| `/api/images/{id}/update` | POST | Pull + recreate container |
-| `/api/images/{id}/auto-update` | POST | Toggle auto-update |
-| `/api/images/{id}/progress` | GET | Pull progress (poll while updating) |
-| `/health` | GET | Health check |
+| `PORT` | `8080` | HTTP listen port |
+| `DOCKER_SOCK` | `/var/run/docker.sock` | Docker Unix socket path |
+| `AUTO_FILE` | `/data/auto-update.json` | Persisted auto-update state file |
+
+Details: [`docs/project/CONFIGURATION.md`](docs/project/CONFIGURATION.md)
+
+## Auto-Update
+
+If auto-update is enabled for a container, Image Watch checks every 10 minutes and automatically pulls plus recreates the container when a newer image digest is available. A 5-minute cooldown prevents repeated rapid updates.
+
+Details: [`docs/project/AUTO-UPDATE.md`](docs/project/AUTO-UPDATE.md)
 
 ## Build
 
 ```bash
+# Local Go build (requires Go 1.22+)
+go build -o image-watch .
+
+# Multi-arch Docker build
 docker buildx build \
   --platform linux/amd64,linux/arm64,linux/arm/v7 \
-  -t ghcr.io/redenfire/docker-image-watcher:latest --push .
+  -t ghcr.io/redenfire/docker-image-watcher:latest \
+  --push .
 ```
 
-## Env
+Details: [`docs/project/BUILD.md`](docs/project/BUILD.md)
 
-| Variable | Default | Description |
-|---|---|---|
-| `PORT` | `8080` | Web UI port |
-| `DOCKER_SOCK` | `/var/run/docker.sock` | Docker socket path |
-| `AUTO_FILE` | `/data/auto-update.json` | Auto-update config persistence |
+## Security
+
+> [!WARNING]
+> This container requires access to `/var/run/docker.sock`. That is effectively root-equivalent access to Docker host.
+
+Mitigations and deployment guidance: [`docs/project/SECURITY.md`](docs/project/SECURITY.md)
+
+## Troubleshooting
+
+- Images showing `unknown` status: check Docker socket access and registry connectivity
+- Pull failures: check Docker Hub rate limits or private registry auth state
+- Auto-update not triggering: confirm container is `outdated` and not inside cooldown window
+
+More: [`docs/project/TROUBLESHOOTING.md`](docs/project/TROUBLESHOOTING.md)
+
+## Contributing
+
+1. Fork upstream repository or clone from Forgejo instance.
+2. Create feature branch: `git checkout -b feature/my-change`
+3. Make change.
+4. Open pull request against upstream repository when appropriate.
+
+## License
+
+MIT — see [`LICENSE`](LICENSE).
