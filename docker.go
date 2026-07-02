@@ -236,17 +236,26 @@ func recreateContainer(id, image string) error {
 
 	body, _ := json.Marshal(createBody)
 
-	// stop with 10s grace period
-	dockerAPI("POST", "/containers/"+id+"/stop?t=10", nil)
+	// stop with 10s grace period (best effort — container may already be stopped)
+	resp, _ := dockerAPI("POST", "/containers/"+id+"/stop?t=10", nil)
+	if resp != nil {
+		resp.Body.Close()
+	}
 	time.Sleep(1 * time.Second)
 	// inspect to confirm stopped, then remove
 	stopped, _ := inspectContainer(id)
 	if stopped != nil {
-		dockerAPI("DELETE", "/containers/"+id, nil)
+		resp, err = dockerAPI("DELETE", "/containers/"+id, nil)
+		if resp != nil {
+			resp.Body.Close()
+		}
+		if err != nil {
+			return fmt.Errorf("remove container %s: %w", id, err)
+		}
 		time.Sleep(500 * time.Millisecond)
 	}
 	// create
-	resp, err := dockerAPI("POST", "/containers/create?name="+strings.TrimPrefix(inspect.Name, "/"), bytes.NewReader(body))
+	resp, err = dockerAPI("POST", "/containers/create?name="+strings.TrimPrefix(inspect.Name, "/"), bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("create: %w", err)
 	}
@@ -260,7 +269,10 @@ func recreateContainer(id, image string) error {
 	}
 	json.NewDecoder(resp.Body).Decode(&created)
 	// start
-	dockerAPI("POST", "/containers/"+created.ID+"/start", nil)
+	resp, _ = dockerAPI("POST", "/containers/"+created.ID+"/start", nil)
+	if resp != nil {
+		resp.Body.Close()
+	}
 	return nil
 }
 
