@@ -35,6 +35,7 @@ type App struct {
 	autoSaved  map[string]bool
 	cooldowns  map[string]time.Time
 	progress   sync.Map
+	updating   sync.Map
 }
 
 func main() {
@@ -250,35 +251,43 @@ func (app *App) checkAll() {
 }
 
 func (app *App) updateContainer(cid string) {
+	if _, loaded := app.updating.LoadOrStore(cid, true); loaded {
+		log.Printf("update %s: already in progress, skipping", cid)
+		return
+	}
+	defer app.updating.Delete(cid)
+
 	app.mu.RLock()
-	var img *ImageStatus
+	var image, containerName string
 	for i := range app.images {
 		if app.images[i].ContainerID == cid {
-			img = &app.images[i]
+			image = app.images[i].Image
+			containerName = app.images[i].ContainerName
 			break
 		}
 	}
 	app.mu.RUnlock()
-	if img == nil {
+
+	if image == "" {
 		return
 	}
 
 	app.progress.Store(cid, PullProgress{Status: "connecting", Layer: "..."})
-	if err := pullImageStream(img.Image, func(p PullProgress) {
+	if err := pullImageStream(image, func(p PullProgress) {
 		app.progress.Store(cid, p)
 	}); err != nil {
 		app.progress.Store(cid, PullProgress{Status: "error: " + err.Error()})
-		log.Printf("pull %s: %v", img.Image, err)
+		log.Printf("pull %s: %v", image, err)
 		return
 	}
 	app.progress.Store(cid, PullProgress{Status: "recreating", Percent: 100})
-	if err := recreateContainer(cid, img.Image); err != nil {
+	if err := recreateContainer(cid, image); err != nil {
 		app.progress.Store(cid, PullProgress{Status: "error: " + err.Error()})
 		log.Printf("recreate %s: %v", cid, err)
 		return
 	}
 	app.progress.Delete(cid)
-	log.Printf("updated %s -> %s", img.ContainerName, img.Image)
+	log.Printf("updated %s -> %s", containerName, image)
 	app.checkAll()
 }
 
