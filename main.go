@@ -2,13 +2,19 @@ package main
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
+	"crypto/subtle"
 	"embed"
+	"encoding/base64"
 	"encoding/json"
 	"io/fs"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -17,6 +23,171 @@ import (
 
 //go:embed web
 var webFS embed.FS
+
+var (
+	authUser   string
+	authPass   string
+	hmacKey    []byte
+	loginMu    sync.Mutex
+	failCount  = make(map[string]*failEntry)
+)
+
+type failEntry struct {
+	count       int
+	last        time.Time
+	blockedUntil time.Time
+}
+
+func sessionToken(user string) (string, error) {
+	expiry := time.Now().Add(24 * time.Hour).Unix()
+	payload := user + "@" + strconv.FormatInt(expiry, 10)
+	mac := hmac.New(sha256.New, hmacKey)
+	mac.Write([]byte(payload))
+	sig := mac.Sum(nil)
+	return base64.RawURLEncoding.EncodeToString([]byte(payload)) + "." + base64.RawURLEncoding.EncodeToString(sig), nil
+}
+
+func verifySession(token string) bool {
+	parts := strings.SplitN(token, ".", 2)
+	if len(parts) != 2 {
+		return false
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil {
+		return false
+	}
+	sig, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return false
+	}
+	mac := hmac.New(sha256.New, hmacKey)
+	mac.Write(payload)
+	expected := mac.Sum(nil)
+	if len(sig) != len(expected) || subtle.ConstantTimeCompare(sig, expected) != 1 {
+		return false
+	}
+	parts2 := strings.SplitN(string(payload), "@", 2)
+	if len(parts2) != 2 {
+		return false
+	}
+	expiry, err := strconv.ParseInt(parts2[1], 10, 64)
+	if err != nil || time.Now().Unix() > expiry {
+		return false
+	}
+	return true
+}
+
+func authMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Cache-Control", "no-store")
+		p := r.URL.Path
+		if p == "/login.html" || p == "/api/login" || p == "/api/logout" || p == "/health" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		c, err := r.Cookie("session")
+		if err != nil || !verifySession(c.Value) {
+			if strings.HasPrefix(p, "/api/") {
+				http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+				return
+			}
+			http.Redirect(w, r, "/login.html", http.StatusFound)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func handleLogin(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+	ip := r.RemoteAddr
+	loginMu.Lock()
+	fe := failCount[ip]
+	now := time.Now()
+	if fe != nil {
+		if now.Sub(fe.last) > time.Minute {
+			fe.count = 0
+			fe.blockedUntil = time.Time{}
+		}
+		if now.Before(fe.blockedUntil) {
+			loginMu.Unlock()
+			w.WriteHeader(http.StatusTooManyRequests)
+			json.NewEncoder(w).Encode(map[string]string{"error": "too many attempts, try later"})
+			return
+		}
+	}
+	loginMu.Unlock()
+
+	var creds struct {
+		User string `json:"user"`
+		Pass string `json:"pass"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&creds); err != nil || creds.User == "" || creds.Pass == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "bad request"})
+		return
+	}
+
+	userOk := subtle.ConstantTimeCompare([]byte(creds.User), []byte(authUser)) == 1
+	passOk := subtle.ConstantTimeCompare([]byte(creds.Pass), []byte(authPass)) == 1
+
+	if !userOk || !passOk {
+		loginMu.Lock()
+		if fe == nil || now.Sub(fe.last) > time.Minute {
+			failCount[ip] = &failEntry{count: 1, last: now}
+		} else {
+			fe.count++
+			fe.last = now
+			if fe.count >= 5 {
+				fe.blockedUntil = now.Add(30 * time.Second)
+			}
+		}
+		loginMu.Unlock()
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid credentials"})
+		return
+	}
+
+	token, err := sessionToken(creds.User)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "internal error"})
+		return
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session",
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   r.TLS != nil,
+		MaxAge:   86400,
+	})
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+func handleLogout(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session",
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   r.TLS != nil,
+		MaxAge:   -1,
+	})
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
 
 type ContainerItem struct {
 	ContainerID   string `json:"container_id"`
@@ -65,6 +236,16 @@ func main() {
 		log.Printf("self CID: %s", app.selfCID)
 	}
 
+	authUser = os.Getenv("AUTH_USER")
+	authPass = os.Getenv("AUTH_PASS")
+	if authUser != "" && authPass != "" {
+		hmacKey = make([]byte, 32)
+		if _, err := rand.Read(hmacKey); err != nil {
+			log.Fatalf("generate HMAC key: %v", err)
+		}
+		log.Println("auth enabled")
+	}
+
 	go func() {
 		app.checkAll()
 		ticker := time.NewTicker(10 * time.Minute)
@@ -79,11 +260,17 @@ func main() {
 	mux.HandleFunc("/api/images", app.handleImages)
 	mux.HandleFunc("/api/images/", app.handleImageAction)
 	mux.HandleFunc("/api/groups/", app.handleGroupAction)
+	mux.HandleFunc("/api/login", handleLogin)
+	mux.HandleFunc("/api/logout", handleLogout)
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	srv := &http.Server{Addr: ":" + port, Handler: mux}
+	var handler http.Handler = mux
+	if authUser != "" && authPass != "" {
+		handler = authMiddleware(mux)
+	}
+	srv := &http.Server{Addr: ":" + port, Handler: handler}
 	go func() {
 		log.Printf("Listening on :%s", port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {

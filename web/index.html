@@ -56,7 +56,7 @@ td { font-size: .875rem; font-family: "SFMono-Regular",Consolas,"Liberation Mono
 </style>
 </head>
 <body>
-<h1>🐳 <span id="appTitle">Docker Image Watcher</span> <small id="status"></small> <span style="margin-left:auto;display:flex;align-items:center;gap:8px"><a href="#" id="langSwitch" style="color:#64748b;text-decoration:none;font-size:.75rem" onclick="switchLang();return false">IT</a><label style="font-size:.8rem;font-weight:400;display:flex;align-items:center;gap:6px;cursor:pointer"><span id="hideLabel">Hide up to date</span> <div class="toggle on" id="hideToggle"></div></label></span></h1>
+<h1>🐳 <span id="appTitle">Docker Image Watcher</span> <small id="status"></small> <span style="margin-left:auto;display:flex;align-items:center;gap:8px"><a href="#" id="langSwitch" style="color:#64748b;text-decoration:none;font-size:.75rem" onclick="switchLang();return false">IT</a><a href="#" id="logoutLink" style="color:#ef4444;text-decoration:none;font-size:.75rem" onclick="doLogout();return false">Logout</a><label style="font-size:.8rem;font-weight:400;display:flex;align-items:center;gap:6px;cursor:pointer"><span id="hideLabel">Hide up to date</span> <div class="toggle on" id="hideToggle"></div></label></span></h1>
 <table><thead><tr>
 <th id="thImage">Image / Container</th><th id="thDigest">Digest</th><th id="thStatus">Status</th><th id="thAuto">Auto</th><th></th>
 </tr></thead><tbody id="rows"></tbody></table>
@@ -102,6 +102,7 @@ const i18n = {
     updatingLabel: '⏳ updating...',
     recreating: 'recreating',
     noProgress: 'no progress',
+    logout: 'Logout',
   },
   it: {
     title: 'Docker Image Watcher',
@@ -131,6 +132,7 @@ const i18n = {
     updatingLabel: '⏳ aggiornamento...',
     recreating: 'ricreazione',
     noProgress: 'nessun progresso',
+    logout: 'Esci',
   }
 };
 
@@ -150,6 +152,7 @@ function applyL10N() {
   document.getElementById('thDigest').textContent = t.digest;
   document.getElementById('thStatus').textContent = t.status;
   document.getElementById('thAuto').textContent = t.auto;
+  document.getElementById('logoutLink').textContent = t.logout;
 }
 
 async function load() {
@@ -182,12 +185,13 @@ function render(groups) {
       const gBadgeLabel = badgeMap[g.status] || g.status;
       const total = g.containers.length;
       const outdated = g.containers.filter(c => c.status === 'outdated').length;
+      const outdatedCids = g.containers.filter(c => c.status === 'outdated').map(c => c.container_id);
       html += `<tr class="group-row">
         <td class="name-cell"><strong>${esc(g.image)}</strong></td>
         <td class="digest">${esc(g.remote_digest)}</td>
         <td><span class="badge ${gBadgeClass}">${gBadgeLabel}</span></td>
         <td></td>
-        <td>${outdated > 0 ? `<button class="btn btn-group" data-image="${esc(g.image)}" onclick="doGroupUpdate(this)">${esc(t.updateAll(total))}</button>` : ''}</td>
+        <td>${outdated > 0 ? `<button class="btn btn-group" data-image="${esc(g.image)}" data-cids="${esc(outdatedCids.join(','))}" onclick="doGroupUpdate(this)">${esc(t.updateAll(total))}</button>` : ''}</td>
       </tr>`;
       for (const c of g.containers) {
         if (!showAll && c.status === 'uptodate') continue;
@@ -239,6 +243,12 @@ async function doUpdate(btn) {
 
 async function doGroupUpdate(btn) {
   const image = btn.dataset.image;
+  const cids = btn.dataset.cids ? btn.dataset.cids.split(',') : [];
+  for (const cid of cids) {
+    updating.add(cid);
+    const cell = document.getElementById('progress-' + cid);
+    if (cell) cell.innerHTML = '<div class="progress-bar"><div class="bar"><div class="fill" style="width:0%"></div></div><span class="pct">0%</span></div>';
+  }
   btn.disabled = true;
   btn.textContent = t.updatingLabel;
   try {
@@ -247,6 +257,7 @@ async function doGroupUpdate(btn) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ image })
     });
+    for (const cid of cids) pollProgress(cid);
     setTimeout(load, 2000);
   } catch(e) {
     btn.textContent = t.errorLabel;
@@ -302,6 +313,11 @@ function switchLang() {
   document.title = i18n[lang].title;
   applyL10N();
   load();
+}
+
+async function doLogout() {
+  try { await fetch('/api/logout', { method: 'POST' }); } catch(_) {}
+  window.location.href = '/login.html';
 }
 </script>
 </body>
