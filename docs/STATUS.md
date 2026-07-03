@@ -41,7 +41,7 @@ Keep private Forgejo `main` synced to latest upstream application state while pr
 - GitNexus MCP verification inside OpenCode has not been completed.
 - Caveman Code install/login verification has not been completed.
 - End-to-end `agent-bridge` MCP verification inside both live agent sessions has not been completed.
-- Forgejo CI/build status for the cleaned branch has not been checked yet.
+- Live OpenCode and Caveman endpoint verification has not been completed yet.
 
 ### Unknowns
 
@@ -68,8 +68,8 @@ Keep private Forgejo `main` synced to latest upstream application state while pr
 ## Last meaningful update
 
 - Date: 2026-07-03
-- Summary: Synced private `main` to latest upstream, restored tracked tooling scaffold cleanly, pruned obsolete PR branches, and documented private-`main` versus upstream-`pr/*` branch policy.
+- Summary: Synced private `main` to latest upstream, restored tracked tooling scaffold cleanly, pruned obsolete PR branches, documented private-`main` versus upstream-`pr/*` branch policy, and confirmed Forgejo build success.
 
 ## Next action
 
-Run Forgejo build/CI on cleaned `main`, then continue live tooling verification and any remaining doc/config cleanup surfaced by that build.
+Run live OpenCode/Caveman MCP verification on cleaned `main`, then continue any endpoint-specific config cleanup surfaced by those checks.

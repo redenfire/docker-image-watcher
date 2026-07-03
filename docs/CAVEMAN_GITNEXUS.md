@@ -1,18 +1,26 @@
 # Caveman Code and GitNexus
 
-GitNexus is the required repository memory/index layer for this template.
+GitNexus is the required repository memory/index layer for this repository.
 
 OpenCode and Caveman Code are separate endpoints. Caveman Code does not read `opencode.json`, so the OpenCode MCP block is not enough for Cave/Caveman sessions.
 
 ## Required project-side Cave config
 
-This template includes:
+This repository includes:
 
 ```text
 .cave/settings.json
 ```
 
-with a GitNexus MCP definition:
+as the canonical Cave-side config, plus a compatibility mirror in:
+
+```text
+.cave/mcp.json
+```
+
+Both should stay aligned for GitNexus and any shared project-local MCP servers such as `agent_bridge`.
+
+`settings.json` carries the primary GitNexus MCP definition:
 
 ```json
 {
@@ -64,9 +72,9 @@ Check whether GitNexus MCP tools are available in this session. If they are not 
 
 `opencode.json` controls OpenCode.
 
-`.cave/settings.json` is the project-side Cave/Caveman configuration location used by this template.
+`.cave/settings.json` is the primary project-side Cave/Caveman configuration location used by this repo, while `.cave/mcp.json` is kept as a compatibility mirror for clients that still read that file.
 
-Changing one does not automatically change the other.
+Changing one does not automatically change the other, so keep both aligned when adjusting repo-side MCP entries.
 
 ## Failure mode
 

@@ -4,6 +4,11 @@
       "type": "stdio",
       "command": "gitnexus",
       "args": ["mcp"]
+    },
+    "agent_bridge": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["tools/agent-bridge/server.mjs"]
     }
   }
 }

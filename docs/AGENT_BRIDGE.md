@@ -27,6 +27,8 @@ Both agents register the same local MCP server under the `agent_bridge` key:
 - OpenCode via local-only `opencode.json`
 - Caveman/Cave via `.cave/settings.json`
 
+For compatibility with Cave clients that still read `.cave/mcp.json`, this repo also mirrors the same broker entry there.
+
 OpenCode local config snippet:
 
 ```json

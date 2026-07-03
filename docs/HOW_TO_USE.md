@@ -1,6 +1,6 @@
-# How to Use This Template
+# How to Use This Repository
 
-This is the single canonical guide for starting a new project from this template. Read `docs/TOOLING_MODEL.md` first if the VS Code / OpenCode / Caveman Code / Codex roles are unclear.
+This document is the repo-specific workstation/onboarding guide for `docker-image-watcher`. It retains the original setup sequence because this repository still carries private tooling scaffold on top of upstream code. For routine maintenance and current priorities, read `docs/STATUS.md`, `docs/TASKS.md`, and `docs/IMPLEMENTATION_WORKFLOW.md` first. Read `docs/TOOLING_MODEL.md` if the VS Code / OpenCode / Caveman Code / Codex roles are unclear.
 
 ## Tooling roles before setup
 
@@ -42,7 +42,7 @@ mkdir my-project
 cd my-project
 ```
 
-If starting from this template, unpack/bootstrap first, then initialize Git.
+If recreating this repository from template history or bootstrap materials, unpack/bootstrap first, then initialize Git.
 
 ```powershell
 git init -b main
@@ -340,7 +340,7 @@ Use GitNexus MCP for repository navigation and codebase understanding.
 
 Enter plan mode.
 
-Analyze the current project state and prepare a precise execution plan for TASK-001.
+Analyze the current project state and prepare a precise execution plan for the active task.
 
 Do not edit files yet.
 
@@ -348,14 +348,14 @@ Your output must include:
 
 1. task interpretation;
 2. project-readiness issues, if any;
-3. expected implementation folder, usually src/ unless ARCHITECTURE.md says otherwise;
+3. expected implementation folder, preserving this repo's intentional root Go app layout unless `docs/ARCHITECTURE.md` says otherwise for the specific work;
 4. files likely involved;
 5. implementation steps;
 6. checks/tests to run;
 7. risks and assumptions;
 8. exact instructions suitable to paste into Caveman Code for implementation.
 
-Keep the plan scoped to TASK-001.
+Keep the plan scoped to the active task.
 Do not introduce unrelated refactors.
 Do not start implementation.
 ```
@@ -373,13 +373,13 @@ Read AGENTS.md, docs/TOOLING_MODEL.md, docs/IMPLEMENTATION_WORKFLOW.md, docs/CAV
 
 Before implementation, verify that GitNexus is available in this Caveman Code session. Prefer GitNexus MCP tools. If GitNexus MCP tools are not visible, check whether `gitnexus status` works from the project root and explicitly report that you are using CLI fallback. If neither works, stop and report the blocker.
 
-Implement only the approved TASK-001 scope.
+Implement only the approved active-task scope.
 
 Do not perform unrelated refactors.
 Do not modify secrets.
 Do not modify generated indexes.
 Do not scatter new files in the repository root.
-Place new implementation files under the dedicated implementation folder identified by the plan, usually src/ unless docs/ARCHITECTURE.md says otherwise.
+Place new implementation files under the dedicated implementation folder identified by the plan, preserving the existing root Go app layout unless `docs/ARCHITECTURE.md` says otherwise for the task.
 Use the smallest correct change.
 
 After implementation:
