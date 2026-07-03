@@ -115,7 +115,10 @@ func pullImageStream(image string, progressFn func(PullProgress)) error {
 			Error string `json:"error"`
 		}
 		if err := dec.Decode(&evt); err != nil {
-			break
+			if err == io.EOF {
+				return nil
+			}
+			return fmt.Errorf("pull stream decode: %w", err)
 		}
 		if evt.Error != "" {
 			return fmt.Errorf("pull error: %s", evt.Error)
@@ -147,7 +150,6 @@ func pullImageStream(image string, progressFn func(PullProgress)) error {
 			Status:  evt.Status,
 		})
 	}
-	return nil
 }
 
 func getLocalDigest(image string) (string, error) {
