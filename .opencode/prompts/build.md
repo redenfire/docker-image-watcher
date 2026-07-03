@@ -13,9 +13,9 @@ Process:
 5. Stop if required baseline docs are empty for a new project.
 6. Inspect current architecture.
 7. Use GitNexus MCP before broad manual file search.
-8. Identify the dedicated implementation folder. Default to `src/` unless `docs/ARCHITECTURE.md` defines another folder.
+8. Identify the dedicated implementation folder. For this repo, preserve the existing upstream root app layout unless `docs/ARCHITECTURE.md` defines another folder for the specific work.
 9. Make the smallest correct change.
-10. Do not scatter new implementation files in the repository root.
+10. Do not scatter new implementation files beyond the established root app layout and existing tooling/doc folders.
 11. Run relevant checks.
 12. Fix check failures once unless the failure reveals a larger design issue.
 13. Update `docs/STATUS.md` if project state changed.

@@ -16,43 +16,47 @@ Choose one:
 - Production
 - Maintenance
 
-Current phase: Implementation
+Current phase: Maintenance
 
 ## Current objective
 
-Complete repository foundation setup for `docker-image-watcher`, verify project tooling state, and add local OpenCode <-> Caveman handoff infrastructure.
+Keep private Forgejo `main` synced to latest upstream application state while preserving local agentic tooling scaffold and preparing project-specific verification/build work.
 
 ## Working state
 
 ### What works
 
-- Upstream Go project code is present on `main`.
+- `main` is rebased onto latest `upstream/main` and includes the private tooling scaffold in a separate follow-up commit.
 - Forgejo `origin` and GitHub `upstream` remotes are configured.
-- Agentic template files were restored on top of project code.
+- Force-push to Forgejo `origin/main` succeeded in this session.
 - GitNexus index was refreshed for current repository state.
-- Local file-handoff helper exists for OpenCode -> Caveman fallback.
-- Shared `agent-bridge` MCP broker scaffolding and docs now exist for structured handoff.
+- Shared `agent-bridge` MCP broker scaffolding and docs exist for structured OpenCode <-> Caveman handoff.
+- Obsolete upstream PR branches were pruned after their fixes landed upstream.
+- Current upstream app state includes grouped image views, auth/login flow, i18n updates, and latest docs refresh.
 
 ### What does not work yet
 
 - FreeLLMAPI verification has not been completed.
-- OpenCode environment loading has not been verified.
+- OpenCode environment loading has not been verified end-to-end in a live session.
 - GitNexus MCP verification inside OpenCode has not been completed.
 - Caveman Code install/login verification has not been completed.
 - End-to-end `agent-bridge` MCP verification inside both live agent sessions has not been completed.
+- Forgejo CI/build status for the cleaned branch has not been checked yet.
 
 ### Unknowns
 
 - Whether both live agent endpoints will expose `agent_bridge` tools cleanly after local install and session restart.
-- Any project-specific improvements beyond initial import and setup.
+- Whether any local tooling docs still lag behind the latest upstream auth/grouped-image behavior beyond the targeted fixes already applied.
+- Any next project-specific improvements beyond maintaining upstream sync and tooling verification.
 
 ## Current blockers
 
-- No confirmed Forgejo push authentication in this session.
+- None confirmed at repository access level; next blocker check is Forgejo build/CI result.
 
 ## Environment/tooling state
 
 - Forgejo remote: Set (`https://git.neomod.cc/neomod/docker-image-watcher.git`)
+- Forgejo push auth in this session: Yes
 - FreeLLMAPI verified: TBD
 - OpenCode env loaded successfully: TBD
 - GitNexus indexed: Yes
@@ -63,9 +67,9 @@ Complete repository foundation setup for `docker-image-watcher`, verify project 
 
 ## Last meaningful update
 
-- Date: 2026-07-02
-- Summary: Added fallback file handoff helper and Phase 1 `agent-bridge` MCP broker scaffold/config/docs for OpenCode <-> Caveman interoperability.
+- Date: 2026-07-03
+- Summary: Synced private `main` to latest upstream, restored tracked tooling scaffold cleanly, pruned obsolete PR branches, and documented private-`main` versus upstream-`pr/*` branch policy.
 
 ## Next action
 
-Install and verify `agent-bridge` MCP locally in both endpoints, then continue tooling verification or project-specific implementation work.
+Run Forgejo build/CI on cleaned `main`, then continue live tooling verification and any remaining doc/config cleanup surfaced by that build.

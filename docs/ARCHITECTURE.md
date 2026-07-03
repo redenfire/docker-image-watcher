@@ -2,8 +2,6 @@
 
 This document describes the architecture of the project and the agentic tooling around it. For the detailed editor/agent endpoint split, see `docs/TOOLING_MODEL.md`.
 
-Replace the project-specific sections with real project content after creating a new repository.
-
 ## Tooling architecture
 
 ```text
@@ -29,11 +27,10 @@ Developer workstation
 ```
 
 
-## Required startup logic
+## Tooling startup sequence
 
 ```text
-Create Project Folder
-Set Forgejo
+Verify remotes and current upstream sync
 Deploy or verify FreeLLMAPI
 Set up free models
 VS Code
@@ -43,7 +40,6 @@ GitNexus install/index
 GitNexus MCP verification
 Caveman Code terminal endpoint
 Paid/frontier OpenCode model routes
-Fill required project docs
 OpenCode planning
 Caveman Code implementation
 ```

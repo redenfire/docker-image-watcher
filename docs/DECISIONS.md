@@ -56,3 +56,20 @@ Consequences:
 - OpenCode and Caveman can exchange structured task state through shared tools rather than ad-hoc Markdown.
 - The broker becomes the preferred handoff path, while `scripts/run-caveman.ps1` remains a fallback.
 - Future automation can build on the broker for launch/orchestration without redesigning the handoff schema.
+
+### DECISION-003 — Keep private Forgejo `main` separate from upstream PR branches
+
+Date: 2026-07-03
+
+Status: accepted
+
+Context:
+This repository mixes upstream application code with private agentic tooling, local workflow docs, and Forgejo-first project scaffolding that is useful for local work but not appropriate for upstream pull requests. A rebase attempt showed that stacking upstreamable fixes and private scaffold changes on the same branch makes PR history confusing and can accidentally push local-only material into shared history.
+
+Decision:
+Use `main` as the private Forgejo integration branch: latest `upstream/main` plus this repository's accepted private tooling/documentation scaffold. Create upstream contribution branches only from fresh `upstream/main`, not from private `main`. Keep local-only files such as `.env`, `opencode.json`, runtime handoff archives, and scratch state untracked and out of any `pr/*` branch.
+
+Consequences:
+- Private workflow files can evolve on `main` without polluting upstream contribution branches.
+- Every new upstream PR must be cut or re-cut from latest `upstream/main` and contain only upstreamable changes.
+- Stale `pr/*` branches should be deleted after upstream merges or superseding rebases instead of being reused blindly.

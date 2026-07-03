@@ -151,6 +151,12 @@ curl http://localhost:8099/api/images/3d4c5b6a7f8e/progress
 
 Trigger async pull and recreate for all containers of an image group.
 
+Request body:
+
+```json
+{"image":"nginx:latest"}
+```
+
 Success response:
 
 ```json
@@ -160,7 +166,9 @@ Success response:
 `curl` example:
 
 ```bash
-curl -X POST http://localhost:8099/api/groups/nginx:latest/update
+curl -X POST http://localhost:8099/api/groups/update \
+  -H 'Content-Type: application/json' \
+  -d '{"image":"nginx:latest"}'
 ```
 
 ### `POST /api/login`

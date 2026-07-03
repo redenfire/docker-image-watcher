@@ -19,9 +19,11 @@ required=(
   "memory/CONSTRAINTS.md"
   "scripts/start-opencode.sh"
   "scripts/start-opencode.ps1"
-  "opencode.json"
+  ".env.example"
   ".cave/settings.json"
-  "src/.gitkeep"
+  "tmp/agent-bridge/.gitignore"
+  "tmp/handoff/.gitignore"
+  "tools/agent-bridge/package.json"
 )
 
 for f in "${required[@]}"; do
@@ -32,6 +34,8 @@ for f in "${required[@]}"; do
 done
 
 
-python3 -m json.tool opencode.json >/dev/null
+if [ -f opencode.json ]; then
+  python3 -m json.tool opencode.json >/dev/null
+fi
 
 echo "Scaffold check passed."

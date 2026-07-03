@@ -21,4 +21,4 @@ TAB cycles agents, not providers. Use `/models` to switch model route during a s
 
 The preferred flow is OpenCode planning first, then Caveman Code implementation. Planning agents must produce a scoped implementation prompt for Caveman Code and must not edit files.
 
-New application/source files should go under `src/` unless `docs/ARCHITECTURE.md` specifies another dedicated implementation folder. Do not scatter generated source files in the repository root.
+This repo intentionally keeps upstream application files at the repository root (`main.go`, `docker.go`, `registry.go`, `web/`, `Dockerfile`, `docker-compose.yml`). Do not invent a `src/` migration or scatter generated source files elsewhere; follow `docs/ARCHITECTURE.md` and existing repo layout.

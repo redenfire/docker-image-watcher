@@ -3,7 +3,7 @@
 Read `docs/TOOLING_MODEL.md` before assuming which editor, agent, provider, or model route is responsible for a task.
 
 
-This repository is a Forgejo-first agentic project template.
+This repository is a Forgejo-first upstream-tracking project with private agentic tooling scaffold.
 
 Agents must follow the project documents and avoid free-running implementation. Work must be scoped, verifiable, and tied to `docs/TASKS.md`.
 
@@ -42,17 +42,20 @@ Do not start coding until OpenCode has produced a scoped plan for the active tas
 
 ## Repository layout rule
 
-Do not scatter application/source files in the repository root.
+This repository intentionally keeps upstream application files at the repository root to stay close to `redenfire/docker-image-watcher`.
 
-Default implementation folder:
+Primary application files remain:
 
 ```text
-src/
+main.go
+docker.go
+registry.go
+web/
+Dockerfile
+docker-compose.yml
 ```
 
-Use `src/` for new source/application files unless `docs/ARCHITECTURE.md` defines another dedicated implementation folder such as `app/`, `packages/`, `services/`, or `infra/`.
-
-Root-level files are allowed only for project documentation, tool configuration, environment examples, scripts, Git/Forgejo metadata, and top-level build files that the project genuinely requires.
+Do not scatter new root-level files beyond the established upstream app layout plus project documentation, tool configuration, environment examples, scripts, Git/Forgejo metadata, and top-level build files that the project genuinely requires. New auxiliary code should follow `docs/ARCHITECTURE.md` and existing folder conventions instead of inventing a default `src/` migration.
 
 ## GitNexus requirement
 

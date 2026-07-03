@@ -18,7 +18,7 @@ Process:
    - `docs/ARCHITECTURE.md`
    - `memory/CONSTRAINTS.md`
 8. Use GitNexus MCP before broad manual file exploration.
-9. Identify the correct implementation folder. Default to `src/` unless `docs/ARCHITECTURE.md` defines a different dedicated folder.
+9. Identify the correct implementation folder. For this repo, keep upstream application files in their established root layout unless `docs/ARCHITECTURE.md` directs otherwise for non-app tooling.
 10. Produce:
    - task interpretation
    - project-readiness issues, if any
@@ -38,4 +38,4 @@ Rules:
 - Do not expand scope.
 - Do not hide unresolved questions.
 - Do not suggest scattering new implementation files in the repository root.
-- Prefer `src/` for new project code unless the architecture defines another dedicated folder.
+- Preserve the repo's intentional root Go app layout; do not propose a `src/` migration unless the task explicitly requires it.

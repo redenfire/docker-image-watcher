@@ -12,7 +12,7 @@ GitNexus is the required memory/index layer when available through the configure
 
 ## Implementation layout
 
-Do not scatter new source files in the repository root. Use `src/` unless `docs/ARCHITECTURE.md` defines another dedicated implementation folder. For the preferred flow, OpenCode produces the plan and Caveman Code executes the approved implementation instructions.
+This repo intentionally keeps upstream application files in the repository root (`main.go`, `docker.go`, `registry.go`, `web/`, `Dockerfile`, `docker-compose.yml`). Do not invent a `src/` migration. Follow `docs/ARCHITECTURE.md`, keep upstream app layout intact, and place only non-application tooling/docs in their established folders. For the preferred flow, OpenCode produces the plan and Caveman Code executes the approved implementation instructions.
 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence

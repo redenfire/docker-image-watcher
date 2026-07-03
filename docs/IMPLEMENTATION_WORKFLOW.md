@@ -14,33 +14,34 @@ Caveman Code
 
 ## Repository layout rule
 
-Do not scatter application files across the repository root.
-
-The repository root is reserved for:
-
-- project instructions and documentation;
-- tool configuration;
-- environment examples;
-- scripts;
-- Git/Forgejo metadata;
-- top-level build files only when the project genuinely requires them.
-
-Default project code location:
+This repository intentionally preserves the upstream application layout at the repository root:
 
 ```text
-src/
+main.go
+docker.go
+registry.go
+web/
+Dockerfile
+docker-compose.yml
 ```
 
-Use `src/` for new application/source files unless `docs/ARCHITECTURE.md` defines another dedicated implementation folder such as:
-
-```text
-app/
-packages/
-services/
-infra/
-```
+Do not invent a `src/` migration or scatter additional root-level files beyond the established upstream app layout plus project instructions/docs, tool configuration, environment examples, scripts, Git/Forgejo metadata, and genuinely required top-level build files.
 
 Temporary experiments, generated scratch work, and one-off agent notes must not be dropped in the root. Put durable tasks in `docs/TASKS.md` or `tasks/`; put temporary local scratch files under `tmp/` and do not commit them.
+
+## Branch policy for upstream contribution work
+
+Use two branch types on purpose:
+
+- `main` = private Forgejo integration branch for this repository's accepted local tooling, docs, and upstream-synced application state;
+- `pr/*` = disposable upstream contribution branches cut from fresh `upstream/main`.
+
+Rules:
+
+1. Do not open upstream PRs from private `main`.
+2. Start each upstreamable fix branch from latest `upstream/main`, then apply only the minimal upstreamable patch.
+3. Do not include local-only files in any `pr/*` branch, including `.env`, `opencode.json`, runtime handoff archives, scratch notes, or generated local state under `tmp/`.
+4. If upstream merges an equivalent fix or moves significantly, delete stale `pr/*` branches and recreate them from latest `upstream/main` instead of stacking new rebases onto old review branches.
 
 ## Required OpenCode planning pass
 

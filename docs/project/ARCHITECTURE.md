@@ -125,7 +125,7 @@ main.go:toggleAuto()
 | `/api/images/{id}/update` | `POST` | `app.handleImageAction` | Starts async update goroutine |
 | `/api/images/{id}/auto-update` | `POST` | `app.handleImageAction` | Toggles persisted auto-update flag |
 | `/api/images/{id}/progress` | `GET` | `app.handleImageAction` | Returns `PullProgress` for in-flight update |
-| `/api/groups/{image}/update` | `POST` | `app.handleGroupAction` | Starts async update for all containers of an image |
+| `/api/groups/update` | `POST` | `app.handleGroupAction` | Starts async update for all containers of an image group passed in JSON body |
 | `/api/login` | `POST` | `handleLogin` | Authenticates user, returns session cookie |
 | `/api/logout` | `POST` | `handleLogout` | Invalidates session cookie |
 | `/health` | `GET` | inline handler | Returns HTTP 200 with empty body |

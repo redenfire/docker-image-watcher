@@ -76,3 +76,21 @@ Files/components affected:
 - `docs/AGENT_BRIDGE.md`
 - `opencode.json`
 - `.cave/settings.json`
+
+### 2026-07-03 - Private Forgejo main must stay separate from upstream PR branches
+
+What was learned:
+
+This repo needs a private integration branch that carries local tooling/docs, while upstream contribution branches must be cut fresh from `upstream/main`. Reusing private `main` or stale rebased PR branches for upstream submissions can mix local-only scaffold state with upstreamable fixes and create confusing review history.
+
+Why it matters:
+
+Future upstream work should start from latest `upstream/main`, contain only minimal upstreamable patches, and delete stale `pr/*` branches after merges instead of stacking more rebases onto them.
+
+Files/components affected:
+
+- `docs/DECISIONS.md`
+- `docs/IMPLEMENTATION_WORKFLOW.md`
+- `docs/STATUS.md`
+- `AGENTS.md`
+- `CLAUDE.md`

@@ -4,8 +4,8 @@ $required = @(
     "README.md",
     "AGENTS.md",
     "docs/TOOLING_MODEL.md",
-  "docs/HOW_TO_USE.md",
-  "docs/IMPLEMENTATION_WORKFLOW.md",
+    "docs/HOW_TO_USE.md",
+    "docs/IMPLEMENTATION_WORKFLOW.md",
     "docs/OPENCODE.md",
     "docs/GITNEXUS.md",
     "docs/CAVEMAN.md",
@@ -18,9 +18,11 @@ $required = @(
     "memory/CONSTRAINTS.md",
     "scripts/start-opencode.sh",
     "scripts/start-opencode.ps1",
-    "opencode.json",
-  ".cave/settings.json",
-  "src/.gitkeep"
+    ".env.example",
+    ".cave/settings.json",
+    "tmp/agent-bridge/.gitignore",
+    "tmp/handoff/.gitignore",
+    "tools/agent-bridge/package.json"
 )
 
 foreach ($file in $required) {
@@ -30,6 +32,8 @@ foreach ($file in $required) {
 }
 
 
-Get-Content opencode.json | ConvertFrom-Json | Out-Null
+if (Test-Path "opencode.json") {
+    Get-Content opencode.json | ConvertFrom-Json | Out-Null
+}
 
 Write-Host "Scaffold check passed."
