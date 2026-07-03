@@ -83,7 +83,7 @@ func authMiddleware(next http.Handler) http.Handler {
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Cache-Control", "no-store")
 		p := r.URL.Path
-		if p == "/login.html" || p == "/api/login" || p == "/api/logout" || p == "/health" {
+		if p == "/login.html" || p == "/api/login" || p == "/api/logout" || p == "/api/auth/status" || p == "/health" {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -257,6 +257,16 @@ func main() {
 	sub, _ := fs.Sub(webFS, "web")
 	mux := http.NewServeMux()
 	mux.Handle("/", http.FileServer(http.FS(sub)))
+	mux.HandleFunc("/login.html", func(w http.ResponseWriter, r *http.Request) {
+		if authUser == "" || authPass == "" {
+			http.Redirect(w, r, "/", http.StatusFound)
+			return
+		}
+		http.ServeFileFS(w, r, sub, "login.html")
+	})
+	mux.HandleFunc("/api/auth/status", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]bool{"enabled": authUser != "" && authPass != ""})
+	})
 	mux.HandleFunc("/api/images", app.handleImages)
 	mux.HandleFunc("/api/images/", app.handleImageAction)
 	mux.HandleFunc("/api/groups/", app.handleGroupAction)

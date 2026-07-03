@@ -307,6 +307,10 @@ applyL10N();
 load();
 setInterval(load, POLL);
 
+fetch('/api/auth/status').then(r => r.json()).then(d => {
+  if (!d.enabled) document.getElementById('logoutLink').style.display = 'none';
+});
+
 function switchLang() {
   lang = lang === 'en' ? 'it' : 'en';
   document.getElementById('langSwitch').textContent = lang === 'en' ? 'IT' : 'EN';
