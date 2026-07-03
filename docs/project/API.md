@@ -4,29 +4,41 @@ Base path: `/`
 
 ## Data Types
 
-### `ImageStatus`
+### `ImageGroup`
 
 Returned by `GET /api/images`.
 
 ```json
 {
-  "container_id": "3d4c5b6a7f8e",
-  "container_name": "nginx",
   "image": "nginx:latest",
-  "local_digest": "sha256:1111111111",
   "remote_digest": "sha256:2222222222",
   "status": "outdated",
-  "auto_update": true
+  "containers": [
+    {
+      "container_id": "3d4c5b6a7f8e",
+      "container_name": "nginx",
+      "local_digest": "sha256:1111111111",
+      "status": "outdated",
+      "auto_update": true
+    }
+  ]
 }
 ```
 
 Fields:
 
+- `image`: normalized image reference, with `:latest` added when missing
+- `remote_digest`: shortened remote digest or `unknown`
+- `status`: `uptodate`, `outdated`, `partial`, or `unknown`
+- `containers`: array of `ContainerItem`
+
+### `ContainerItem`
+
+Fields:
+
 - `container_id`: first 12 chars of Docker container ID
 - `container_name`: Docker container name without leading `/`
-- `image`: normalized image reference, with `:latest` added when missing
 - `local_digest`: shortened local digest or `unknown`
-- `remote_digest`: shortened remote digest or `unknown`
 - `status`: `uptodate`, `outdated`, or `unknown`
 - `auto_update`: persisted toggle state for this container
 
@@ -50,20 +62,25 @@ Returned by `GET /api/images/{id}/progress`.
 
 ### `GET /api/images`
 
-Return all running containers currently tracked by Image Watch.
+Return all running containers grouped by image.
 
 Success response:
 
 ```json
 [
   {
-    "container_id": "3d4c5b6a7f8e",
-    "container_name": "nginx",
     "image": "nginx:latest",
-    "local_digest": "sha256:1111111111",
     "remote_digest": "sha256:2222222222",
     "status": "outdated",
-    "auto_update": false
+    "containers": [
+      {
+        "container_id": "3d4c5b6a7f8e",
+        "container_name": "nginx",
+        "local_digest": "sha256:1111111111",
+        "status": "outdated",
+        "auto_update": false
+      }
+    ]
   }
 ]
 ```
@@ -130,6 +147,55 @@ When no update is active yet, endpoint returns `404` with `no progress` body.
 curl http://localhost:8099/api/images/3d4c5b6a7f8e/progress
 ```
 
+### `POST /api/groups/update`
+
+Trigger async pull and recreate for all containers of an image group.
+
+Success response:
+
+```json
+{"status":"updating"}
+```
+
+`curl` example:
+
+```bash
+curl -X POST http://localhost:8099/api/groups/nginx:latest/update
+```
+
+### `POST /api/login`
+
+Authenticate with credentials and receive a session cookie.
+
+Request body:
+
+```json
+{"user":"admin","pass":"changeme"}
+```
+
+Success response:
+
+- HTTP `200` with `Set-Cookie` header
+- Body: `{"status":"ok"}`
+
+### `POST /api/logout`
+
+Invalidate session cookie.
+
+Success response:
+
+- HTTP `200` with expired `Set-Cookie`
+
+### `GET /api/auth/status`
+
+Return whether auth is enabled.
+
+Success response:
+
+```json
+{"enabled": true}
+```
+
 ### `GET /health`
 
 Health probe.
@@ -151,11 +217,11 @@ Common errors emitted by handlers:
 
 | Status | Body | When |
 |---|---|---|
-| `400` | `bad path: /api/images/{id}/{action}` | Path after `/api/images/` does not contain exactly `{id}/{action}` |
-| `400` | `unknown action` | Action is not `update`, `auto-update`, or `progress` |
-| `404` | `container not found` | Container ID is not present in current `app.images` snapshot |
-| `404` | `no progress` | No active progress snapshot for given container |
-| `405` | `method not allowed` | Wrong HTTP method used for endpoint |
+| `400` | `bad path: /api/images/{id}/{action}\n` | Path after `/api/images/` does not contain exactly `{id}/{action}` |
+| `400` | `unknown action\n` | Action is not `update`, `auto-update`, or `progress` |
+| `404` | `container not found\n` | Container ID is not present in current `app.images` snapshot |
+| `404` | `no progress\n` | No active progress snapshot for given container |
+| `405` | `method not allowed\n` | Wrong HTTP method used for endpoint |
 
 ## Notes
 

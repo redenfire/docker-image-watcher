@@ -66,11 +66,12 @@ Check cycle:
 ```text
 main.go:checkAll()
 -> docker.go:listContainers()
--> for each container:
-   -> docker.go:getLocalDigest()
+-> for each image group:
    -> registry.go:getRemoteDigest()
-   -> compare digests
--> refresh ImageStatus list
+   -> for each container:
+      -> docker.go:getImageDigest()  // fallback: getLocalDigest()
+      -> compare digests
+-> refresh ImageGroup list
 -> auto-update outdated containers when enabled
 ```
 
@@ -94,6 +95,7 @@ main.go:updateContainer()
 | `POST /api/groups/update` | Trigger async pull + recreate for all containers of an image |
 | `POST /api/login` | Authenticate and receive session cookie |
 | `POST /api/logout` | Invalidate session cookie |
+| `GET /api/auth/status` | Return whether auth is enabled |
 | `GET /health` | Health check |
 
 Full reference: [`docs/project/API.md`](docs/project/API.md)
@@ -107,6 +109,9 @@ Full reference: [`docs/project/API.md`](docs/project/API.md)
 | `AUTO_FILE` | `/data/auto-update.json` | Persisted auto-update state file |
 | `AUTH_USER` | — | Enable HTTP auth (required together with AUTH_PASS) |
 | `AUTH_PASS` | — | Password for HTTP auth |
+| `CHECK_INTERVAL` | `10m` | Background check interval |
+| `CHECK_CONCURRENCY` | `5` | Max concurrent registry requests during check |
+| `AUTO_COOLDOWN` | `5m` | Cooldown between auto-updates for same container |
 
 Details: [`docs/project/CONFIGURATION.md`](docs/project/CONFIGURATION.md)
 

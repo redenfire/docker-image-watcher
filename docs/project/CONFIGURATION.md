@@ -7,6 +7,34 @@
 | `PORT` | `8080` | HTTP listen port for web UI and API |
 | `DOCKER_SOCK` | `/var/run/docker.sock` | Unix socket path used for Docker Engine API |
 | `AUTO_FILE` | `/data/auto-update.json` | JSON file storing per-container auto-update state |
+| `CHECK_INTERVAL` | `10m` | Interval for background digest check loop |
+| `CHECK_CONCURRENCY` | `5` | Max concurrent registry requests during check |
+| `AUTO_COOLDOWN` | `5m` | Cooldown window between auto-updates for same container |
+
+### `AUTH_USER` / `AUTH_PASS`
+
+- Read in `main.go`
+- When both set, enables HMAC-signed session auth with login page
+- Unauthenticated requests to API return 401
+- Login brute-force rate-limited: 5 failures/min → 30s block
+
+### `CHECK_INTERVAL`
+
+- Read in `main.go` via `getEnvDuration`
+- Defaults to `10m` (10 minutes)
+- Controls how often the background goroutine checks all running containers against registry
+
+### `CHECK_CONCURRENCY`
+
+- Read in `main.go` via `os.Getenv`
+- Defaults to `5`
+- Caps parallel registry manifest requests during a check cycle
+
+### `AUTO_COOLDOWN`
+
+- Read in `main.go` via `getEnvDuration`
+- Defaults to `5m` (5 minutes)
+- Prevents repeated auto-updates for the same container within the window
 
 ## Variable Details
 

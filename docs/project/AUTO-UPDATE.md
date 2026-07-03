@@ -38,13 +38,15 @@ Implementation points:
 Background refresh loop in `main.go`:
 
 - runs one initial `checkAll()` on startup
-- then runs every 10 minutes via `time.NewTicker(10 * time.Minute)`
+- then runs periodically, default 10 minutes
+- configurable via `CHECK_INTERVAL` env var
 
 ## Cooldown
 
 Automatic updates use per-container cooldown:
 
-- cooldown window: 5 minutes
+- default cooldown window: 5 minutes
+- configurable via `AUTO_COOLDOWN` env var
 - stored in `App.cooldowns`
 - checked inside `checkAll()` before triggering auto-update
 
@@ -57,7 +59,7 @@ Auto-update only triggers when all conditions are true:
 - container appears in current running container list
 - auto-update is enabled for that container
 - computed status is `outdated`
-- no active 5-minute cooldown blocks that container
+- no active cooldown (default 5 min, configurable via `AUTO_COOLDOWN`) blocks that container
 
 ## Concurrency and State Safety
 

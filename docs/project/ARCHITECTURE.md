@@ -35,7 +35,8 @@ Runtime dependencies:
 
 | Structure | Defined in | Purpose |
 |---|---|---|
-| `ImageStatus` | `main.go` | API/UI state for one running container |
+| `ImageGroup` | `main.go` | API/UI state for one image with its containers |
+| `ContainerItem` | `main.go` | API/UI state for one running container |
 | `dockerContainer` | `docker.go` | Container list entry from Docker Engine |
 | `dockerInspect` | `docker.go` | Partial inspect payload used for recreation |
 | `PullProgress` | `docker.go` | Aggregated pull progress reported to UI |
@@ -70,7 +71,7 @@ Runtime dependencies:
 
 - Polls `/api/images` every 10 seconds
 - Shows container table, digest comparison, status badges, progress UI, and auto-update toggles
-- Calls update and auto-update API routes directly from browser JavaScript
+- Calls API routes (images, groups, auth) directly from browser JavaScript
 
 ## Key Call Chains
 
@@ -79,10 +80,12 @@ Runtime dependencies:
 ```text
 main.go:checkAll()
 -> docker.go:listContainers()
--> docker.go:getLocalDigest()
--> registry.go:getRemoteDigest()
--> compare digests
--> store []ImageStatus
+-> for each image group:
+   -> registry.go:getRemoteDigest()
+   -> for each container:
+      -> docker.go:getImageDigest()  // fallback: getLocalDigest()
+      -> compare digests
+-> store []ImageGroup
 -> if auto_update && outdated && cooldown expired:
    -> main.go:updateContainer()
 ```
@@ -114,12 +117,17 @@ main.go:toggleAuto()
 ## Route-to-Handler Mapping
 
 | Route | Method | Handler | Behavior |
-|---|---|---|---|
+|---|---|---|---|---|
 | `/` | `GET` | `http.FileServer(http.FS(sub))` | Serves embedded `web/` assets |
-| `/api/images` | `GET` | `app.handleImages` | Returns JSON array of `ImageStatus` |
+| `/login.html` | `GET` | inline handler | Serves login page, redirects to `/` if auth disabled |
+| `/api/auth/status` | `GET` | inline handler | Returns JSON `{"enabled": true/false}` |
+| `/api/images` | `GET` | `app.handleImages` | Returns JSON array of `ImageGroup` |
 | `/api/images/{id}/update` | `POST` | `app.handleImageAction` | Starts async update goroutine |
 | `/api/images/{id}/auto-update` | `POST` | `app.handleImageAction` | Toggles persisted auto-update flag |
 | `/api/images/{id}/progress` | `GET` | `app.handleImageAction` | Returns `PullProgress` for in-flight update |
+| `/api/groups/{image}/update` | `POST` | `app.handleGroupAction` | Starts async update for all containers of an image |
+| `/api/login` | `POST` | `handleLogin` | Authenticates user, returns session cookie |
+| `/api/logout` | `POST` | `handleLogout` | Invalidates session cookie |
 | `/health` | `GET` | inline handler | Returns HTTP 200 with empty body |
 
 ## Concurrency Model
