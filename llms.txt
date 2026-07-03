@@ -1,0 +1,34 @@
+# Agentic Forgejo Project Template v6.7
+
+Canonical flow:
+Read Tooling Model -> Create Project Folder -> Set Forgejo -> FreeLLMAPI Deploy/Verify -> Setup Free Models -> VS Code -> OpenCode -> load .env -> GitNexus -> verify GitNexus MCP -> Caveman Code -> Paid/Frontier OpenCode Models -> Fill Required Project Documents -> Plan first task.
+
+Core rules:
+- GitNexus is required as the memory/index layer.
+- OpenCode must be launched through scripts/start-opencode.* so .env is loaded.
+- TAB changes agents; /models changes model route.
+- Default OpenCode route is DeepSeek main model and FreeLLMAPI small model.
+- OpenAI API is backup/emergency only when explicitly selected and funded.
+- Caveman Code is a separate terminal coding endpoint.
+- Caveman Skill is optional for agent-specific brevity behavior.
+
+Important docs:
+- docs/TOOLING_MODEL.md
+- docs/HOW_TO_USE.md
+- docs/OPENCODE.md
+- docs/GITNEXUS.md
+- docs/CAVEMAN.md
+- docs/CODEX.md
+- docs/FREELLMAPI.md
+- docs/STATUS.md
+- docs/TASKS.md
+- memory/PROJECT_BRIEF.md
+- memory/CONSTRAINTS.md
+
+
+Endpoint reminder: VS Code is the editor; OpenCode is the configurable agent with FreeLLMAPI/DeepSeek/OpenAI routes; Caveman Code is the separate low-token terminal/Codex-capable endpoint; Codex in VS Code is optional.
+
+- docs/IMPLEMENTATION_WORKFLOW.md: OpenCode planning to Caveman Code implementation handoff and repository layout rules.
+
+- docs/CAVEMAN_GITNEXUS.md: Cave/Caveman GitNexus MCP configuration and fallback policy.
+- .cave/settings.json: Cave/Caveman project-side GitNexus MCP config.

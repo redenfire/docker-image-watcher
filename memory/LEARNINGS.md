@@ -1,0 +1,78 @@
+# Learnings
+
+Durable knowledge discovered while working on the project.
+
+## Format
+
+```md
+### YYYY-MM-DD - Short title
+
+What was learned:
+
+Why it matters:
+
+Files/components affected:
+```
+
+### 2026-06-23 - Forgejo registry workflows should separate runner push host from client pull host
+
+What was learned:
+
+A Forgejo Actions runner may need to push to a local/LAN registry endpoint that is different from the hostname used later by Portainer or other clients.
+
+Why it matters:
+
+Template workflows and docs should treat `REGISTRY_PUSH_HOST` and `REGISTRY_PULL_HOST` as separate operational concerns so self-hosted CI does not depend on the public pull hostname.
+
+Files/components affected:
+
+- `deploy/freellmapi/builder-repo/.forgejo/workflows/build-freellmapi-image.yaml`
+- `deploy/freellmapi/builder-repo/README.md`
+
+### 2026-06-23 - Forgejo repo variables should be sanitized before composing Docker tags or API URLs
+
+What was learned:
+
+Repository variables pasted into Forgejo can carry trailing `\r`/`\n`. If a workflow interpolates them directly into Docker image references or Forgejo API URLs, builds and cleanup calls can fail with invalid references or malformed hosts. Recomputing critical image tags inside each shell step is also easier to debug than depending on fragile image-name propagation from earlier steps.
+
+Why it matters:
+
+Template workflows should strip trailing newlines from registry/image variables before use, and should compose critical Docker tags locally inside each shell step.
+
+Files/components affected:
+
+- `deploy/freellmapi/builder-repo/.forgejo/workflows/build-freellmapi-image.yaml`
+- `deploy/freellmapi/builder-repo/.forgejo/workflows/cleanup-freellmapi-registry.yaml`
+- `deploy/freellmapi/builder-repo/README.md`
+- `deploy/freellmapi/README.md`
+
+### 2026-07-02 - Portable Go toolchain is available locally for build checks
+
+What was learned:
+
+This workstation now has a local portable Go toolchain at `C:\Users\neomod\AppData\Local\PortableTools\Go\go1.26.4`. It is intentionally not installed globally and not added to PATH, so build checks should call `go.exe` by full path when needed.
+
+Why it matters:
+
+Future build verification for this repo can run without changing system-wide tool configuration or assuming `go` is on PATH.
+
+Files/components affected:
+
+- local workstation tool state only
+
+### 2026-07-02 - OpenCode and Caveman interop fits a shared MCP broker better than Markdown relay
+
+What was learned:
+
+OpenCode and Caveman Code are separate endpoints with separate MCP registration paths. Because both can consume project-local MCP servers, the safest path to structured interoperability is a shared local broker with JSON handoffs, not manual Markdown baton-passing.
+
+Why it matters:
+
+Future automation can build on the same broker protocol for launch/orchestration without depending on prompt copy/paste or ad-hoc file parsing.
+
+Files/components affected:
+
+- `tools/agent-bridge/server.mjs`
+- `docs/AGENT_BRIDGE.md`
+- `opencode.json`
+- `.cave/settings.json`

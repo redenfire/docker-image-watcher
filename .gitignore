@@ -1,0 +1,6 @@
+# Local secrets
+.env
+opencode.json
+
+# Local tool dependencies
+tools/agent-bridge/node_modules/

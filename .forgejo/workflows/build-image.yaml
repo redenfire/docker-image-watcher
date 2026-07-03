@@ -1,0 +1,155 @@
+name: Build docker-image-watcher image
+
+on:
+  push:
+    branches: [main, '**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: docker
+
+    env:
+      DOCKER_HOST: ${{ vars.DOCKER_HOST }}
+      REGISTRY_PUSH_HOST: ${{ vars.REGISTRY_PUSH_HOST }}
+      REGISTRY_PULL_HOST: ${{ vars.REGISTRY_PULL_HOST }}
+      IMAGE_NAMESPACE: ${{ vars.IMAGE_NAMESPACE }}
+      IMAGE_NAME: docker-image-watcher
+
+    container:
+      image: docker:27-cli
+
+    steps:
+      - name: Install workflow dependencies
+        run: |
+          set -eu
+          apk add --no-cache bash git
+
+      - name: Manual checkout
+        shell: bash
+        env:
+          GIT_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          server="${GITHUB_SERVER_URL#https://}"
+          repo_url="https://git:${GIT_TOKEN}@${server}/${GITHUB_REPOSITORY}.git"
+          workspace="${GITHUB_WORKSPACE:-$PWD}"
+
+          mkdir -p "${workspace}"
+          git clone --depth 1 "${repo_url}" "${workspace}"
+          cd "${workspace}"
+          git checkout "${GITHUB_SHA}"
+
+      - name: Sanitize variables and define image tags
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sanitize() { printf '%s' "${1:-}" | tr -d '\r\n'; }
+
+          push_registry="$(sanitize "${REGISTRY_PUSH_HOST:-}")"
+          pull_registry="$(sanitize "${REGISTRY_PULL_HOST:-}")"
+          namespace="$(sanitize "${IMAGE_NAMESPACE:-}")"
+
+          if [ -z "$push_registry" ] || [ -z "$pull_registry" ] || [ -z "$namespace" ]; then
+            echo "REGISTRY_PUSH_HOST, REGISTRY_PULL_HOST, and IMAGE_NAMESPACE are required." >&2
+            exit 1
+          fi
+
+          short_sha="${GITHUB_SHA:0:12}"
+          branch_safe="$(printf '%s' "${GITHUB_REF_NAME}" | tr '/:@ ' '----')"
+
+          push_base="$push_registry/$namespace/$IMAGE_NAME"
+          pull_base="$pull_registry/$namespace/$IMAGE_NAME"
+
+          echo "push_base=$push_base" >> "$GITHUB_ENV"
+          echo "pull_base=$pull_base" >> "$GITHUB_ENV"
+          echo "sha_tag=$push_base:sha-$short_sha" >> "$GITHUB_ENV"
+          echo "branch_tag=$push_base:$branch_safe" >> "$GITHUB_ENV"
+          echo "compile_check_tag=$push_base:build-check-$short_sha" >> "$GITHUB_ENV"
+          echo "short_sha=$short_sha" >> "$GITHUB_ENV"
+          echo "branch_safe=$branch_safe" >> "$GITHUB_ENV"
+
+      - name: Login to Forgejo container registry
+        shell: bash
+        env:
+          REGISTRY_USER: ${{ secrets.REGISTRY_USER }}
+          REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+        run: |
+          set -euo pipefail
+          sanitize() { printf '%s' "${1:-}" | tr -d '\r\n'; }
+          export DOCKER_HOST="$(sanitize "${DOCKER_HOST:-}")"
+          registry="$(sanitize "${REGISTRY_PUSH_HOST:-}")"
+          user="$(sanitize "${REGISTRY_USER:-${REGISTRY_USERNAME:-}}")"
+          if [ -z "$registry" ] || [ -z "$user" ]; then
+            echo "REGISTRY_PUSH_HOST and REGISTRY_USER or REGISTRY_USERNAME are required." >&2
+            exit 1
+          fi
+          echo "${{ secrets.REGISTRY_TOKEN }}" | \
+            docker login "$registry" -u "$user" --password-stdin
+
+      - name: Build Go binary check
+        shell: bash
+        run: |
+          set -euo pipefail
+          sanitize() { printf '%s' "${1:-}" | tr -d '\r\n'; }
+          export DOCKER_HOST="$(sanitize "${DOCKER_HOST:-}")"
+          cd "${GITHUB_WORKSPACE:-$PWD}"
+          docker build -t "${compile_check_tag}" -f- . <<'EOF'
+          FROM golang:1.22-alpine
+          WORKDIR /src
+          COPY . .
+          RUN go build -o /dev/null .
+          EOF
+
+      - name: Build and tag Docker image
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "${GITHUB_WORKSPACE:-$PWD}"
+          docker build \
+            --label org.opencontainers.image.source="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+            --label org.opencontainers.image.revision="${GITHUB_SHA}" \
+            --label org.opencontainers.image.version="${branch_safe}-${short_sha}" \
+            -t "${sha_tag}" \
+            -t "${branch_tag}" \
+            .
+
+      - name: Push image to Forgejo registry
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker push "${sha_tag}"
+          docker push "${branch_tag}"
+          if [ "${GITHUB_REF_NAME}" = "main" ]; then
+            docker tag "${sha_tag}" "${push_base}:latest"
+            docker push "${push_base}:latest"
+          fi
+
+      - name: Cleanup local image tags
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker image rm "${compile_check_tag}" >/dev/null 2>&1 || true
+          docker image rm "${sha_tag}" >/dev/null 2>&1 || true
+          docker image rm "${branch_tag}" >/dev/null 2>&1 || true
+          if [ "${GITHUB_REF_NAME}" = "main" ]; then
+            docker image rm "${push_base}:latest" >/dev/null 2>&1 || true
+          fi
+
+      - name: Deployment info
+        shell: bash
+        run: |
+          cat <<MSG
+          Image built and pushed for branch: ${GITHUB_REF_NAME}
+
+          Pull tags:
+            ${pull_base}:${branch_safe}
+            ${pull_base}:sha-${short_sha}
+
+          ${GITHUB_REF_NAME} == main ? "latest tag also pushed: ${pull_base}:latest" : ""
+          MSG

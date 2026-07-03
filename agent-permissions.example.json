@@ -1,0 +1,14 @@
+{
+  "default": {
+    "read": true,
+    "edit": "ask",
+    "bash": "ask",
+    "network": "ask"
+  },
+  "forbidden_paths": [
+    ".env",
+    ".gitnexus/",
+    "**/*.pem",
+    "**/*.key"
+  ]
+}

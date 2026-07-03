@@ -1,0 +1,210 @@
+name: Cleanup FreeLLMAPI registry versions
+
+on:
+  workflow_dispatch:
+
+  schedule:
+    - cron: "30 4 * * 0"
+
+jobs:
+  cleanup:
+    runs-on: docker
+
+    container:
+      image: alpine:3.21
+
+    steps:
+      - name: Install dependencies
+        run: |
+          set -eu
+          apk add --no-cache bash curl jq
+
+      - name: Cleanup old FreeLLMAPI registry versions
+        shell: bash
+        env:
+          KEEP: ${{ vars.KEEP_FREELLMAPI_VERSIONS }}
+          FORGEJO_API_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+          FORGEJO_HOST: ${{ vars.REGISTRY_PULL_HOST }}
+          PACKAGE_OWNER: ${{ vars.IMAGE_NAMESPACE }}
+          PACKAGE_NAME: ${{ vars.IMAGE_NAME }}
+        run: |
+          set -euo pipefail
+
+          sanitize() {
+            printf '%s' "${1:-}" | tr -d '\r\n'
+          }
+
+          keep="$(sanitize "${KEEP:-3}")"
+          forgejo_api_token="$(sanitize "${FORGEJO_API_TOKEN:-}")"
+          forgejo_host="$(sanitize "${FORGEJO_HOST:-}")"
+          package_owner="$(sanitize "${PACKAGE_OWNER:-}")"
+          package_name="$(sanitize "${PACKAGE_NAME:-}")"
+
+          if ! printf '%s' "$keep" | grep -Eq '^[0-9]+$'; then
+            echo "KEEP_FREELLMAPI_VERSIONS must be numeric." >&2
+            exit 1
+          fi
+
+          if [ "$keep" -lt 1 ]; then
+            echo "KEEP_FREELLMAPI_VERSIONS must be >= 1." >&2
+            exit 1
+          fi
+
+          if [ -z "$forgejo_api_token" ] || [ -z "$forgejo_host" ] || [ -z "$package_owner" ] || [ -z "$package_name" ]; then
+            echo "Missing FORGEJO_API_TOKEN, FORGEJO_HOST, PACKAGE_OWNER, or PACKAGE_NAME." >&2
+            exit 1
+          fi
+
+          api="https://${forgejo_host}/api/v1"
+          packages_url="${api}/packages/${package_owner}?type=container"
+
+          echo "Target:"
+          echo "  Forgejo API: ${api}"
+          echo "  owner: ${package_owner}"
+          echo "  package: ${package_name}"
+          echo "  keep main-* versions: ${keep}"
+
+          echo
+          echo "Listing container packages:"
+          echo "GET ${packages_url}"
+
+          status="$(curl -sS \
+            -o /tmp/packages.json \
+            -w "%{http_code}" \
+            -H "Authorization: token ${forgejo_api_token}" \
+            -H "Accept: application/json" \
+            "${packages_url}" || true)"
+
+          echo "HTTP ${status}"
+
+          if [ "$status" != "200" ]; then
+            echo "Could not list packages. Body:"
+            cat /tmp/packages.json || true
+            echo
+            echo "No cleanup performed."
+            exit 1
+          fi
+
+          jq -r --arg wanted "$package_name" '
+            .[]
+            | select((.type // "" | tostring) == "container")
+            | select((.name // "" | tostring) == $wanted)
+            | [
+                (.id // "" | tostring),
+                (.name // "" | tostring),
+                (.version // "" | tostring),
+                (.created_at // "" | tostring)
+              ]
+            | @tsv
+          ' /tmp/packages.json | tee /tmp/freellmapi_all.tsv
+
+          total_all="$(wc -l < /tmp/freellmapi_all.tsv | tr -d " ")"
+
+          if [ "$total_all" -eq 0 ]; then
+            echo "No matching package rows found for ${package_name}."
+            echo "No cleanup performed."
+            exit 0
+          fi
+
+          awk -F '\t' '$3 ~ /^main-/ { print }' /tmp/freellmapi_all.tsv \
+            | sort -t "$(printf '\t')" -k4,4r \
+            > /tmp/freellmapi_main_versions.tsv
+
+          total_main="$(wc -l < /tmp/freellmapi_main_versions.tsv | tr -d " ")"
+
+          echo
+          echo "main-* versions found: ${total_main}"
+          cat /tmp/freellmapi_main_versions.tsv || true
+
+          if [ "$total_main" -le "$keep" ]; then
+            echo "Nothing to delete. main-* total ${total_main} <= keep ${keep}."
+            exit 0
+          fi
+
+          tail -n "+$((keep + 1))" /tmp/freellmapi_main_versions.tsv > /tmp/freellmapi_old_main.tsv
+
+          echo
+          echo "Old main-* versions selected for deletion:"
+          cat /tmp/freellmapi_old_main.tsv
+
+          : > /tmp/freellmapi_delete.tsv
+
+          while IFS="$(printf '\t')" read -r package_id row_package_name package_version created_at; do
+            if [ -z "$package_version" ]; then
+              continue
+            fi
+
+            case "$package_version" in
+              main-*)
+                printf '%s\t%s\t%s\t%s\n' "$package_id" "$row_package_name" "$package_version" "$created_at" >> /tmp/freellmapi_delete.tsv
+
+                short_sha="${package_version#main-}"
+                sha_version="sha-${short_sha}"
+
+                awk -F '\t' -v sha_version="$sha_version" '$3 == sha_version { print }' /tmp/freellmapi_all.tsv >> /tmp/freellmapi_delete.tsv
+                ;;
+              *)
+                echo "Refusing unmanaged candidate: ${package_version}"
+                ;;
+            esac
+          done < /tmp/freellmapi_old_main.tsv
+
+          sort -u /tmp/freellmapi_delete.tsv > /tmp/freellmapi_delete_unique.tsv
+
+          echo
+          echo "Final deletion candidates:"
+          cat /tmp/freellmapi_delete_unique.tsv
+
+          echo
+          echo "Deleting old FreeLLMAPI registry versions."
+
+          while IFS="$(printf '\t')" read -r package_id row_package_name package_version created_at; do
+            if [ -z "$row_package_name" ] || [ -z "$package_version" ]; then
+              echo "Skipping malformed row."
+              continue
+            fi
+
+            case "$package_version" in
+              latest)
+                echo "Refusing to delete latest."
+                continue
+                ;;
+              main-*|sha-*)
+                echo "Deleting ${row_package_name}:${package_version} created_at=${created_at}"
+                ;;
+              sha256:*)
+                echo "Refusing to delete registry digest row: ${package_version}"
+                continue
+                ;;
+              *)
+                echo "Refusing unmanaged version: ${package_version}"
+                continue
+                ;;
+            esac
+
+            encoded_name="$(printf '%s' "$row_package_name" | jq -sRr @uri)"
+            encoded_version="$(printf '%s' "$package_version" | jq -sRr @uri)"
+
+            delete_url="${api}/packages/${package_owner}/container/${encoded_name}/${encoded_version}"
+
+            delete_status="$(curl -sS \
+              -o /tmp/delete_body.txt \
+              -w "%{http_code}" \
+              -X DELETE \
+              -H "Authorization: token ${forgejo_api_token}" \
+              -H "Accept: application/json" \
+              "$delete_url" || true)"
+
+            echo "DELETE ${delete_url}"
+            echo "HTTP ${delete_status}"
+
+            case "$delete_status" in
+              200|202|204)
+                echo "Deleted ${row_package_name}:${package_version}"
+                ;;
+              *)
+                echo "Warning: failed to delete ${row_package_name}:${package_version}. Body:"
+                cat /tmp/delete_body.txt || true
+                ;;
+            esac
+          done < /tmp/freellmapi_delete_unique.tsv

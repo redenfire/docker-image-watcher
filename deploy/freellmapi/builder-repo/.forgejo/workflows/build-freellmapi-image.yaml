@@ -1,0 +1,364 @@
+name: Build FreeLLMAPI image
+
+on:
+  workflow_dispatch:
+    inputs:
+      upstream_ref:
+        description: "Optional upstream tag, branch, or commit SHA. Empty = main."
+        required: false
+        default: "main"
+        type: string
+
+  schedule:
+    - cron: "17 3 * * *"
+
+jobs:
+  build-if-new:
+    runs-on: docker
+
+    env:
+      # This Forgejo runner uses a shared remote Docker daemon.
+      # Configure this repo variable instead of assuming /var/run/docker.sock.
+      DOCKER_HOST: ${{ vars.DOCKER_HOST }}
+      REGISTRY_PUSH_HOST: ${{ vars.REGISTRY_PUSH_HOST }}
+      REGISTRY_PULL_HOST: ${{ vars.REGISTRY_PULL_HOST }}
+      IMAGE_NAMESPACE: ${{ vars.IMAGE_NAMESPACE }}
+      IMAGE_NAME: ${{ vars.IMAGE_NAME }}
+
+    container:
+      image: docker:27-cli
+
+    steps:
+      - name: Install workflow dependencies
+        run: |
+          set -eu
+          apk add --no-cache bash curl git jq
+
+      - name: Resolve upstream FreeLLMAPI ref
+        id: upstream
+        shell: bash
+        env:
+          INPUT_UPSTREAM_REF: ${{ inputs.upstream_ref }}
+        run: |
+          set -euo pipefail
+
+          ref="${INPUT_UPSTREAM_REF:-main}"
+          if [ -z "$ref" ]; then
+            ref="main"
+          fi
+
+          echo "Requested upstream ref: $ref"
+
+          git clone https://github.com/tashfeenahmed/freellmapi.git upstream
+          cd upstream
+          git fetch --tags --force
+          git checkout "$ref"
+
+          full_sha="$(git rev-parse HEAD)"
+          short_sha="$(git rev-parse --short=12 HEAD)"
+          safe_ref="$(printf '%s' "$ref" | tr '/:@ ' '----')"
+          version="${safe_ref}-${short_sha}"
+
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "full_sha=$full_sha" >> "$GITHUB_OUTPUT"
+          echo "short_sha=$short_sha" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+          echo "Resolved upstream ref: $ref"
+          echo "Resolved upstream commit: $full_sha"
+          echo "Image version: $version"
+
+      - name: Define image names
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sanitize() {
+            printf '%s' "${1:-}" | tr -d '\r\n'
+          }
+
+          push_registry="$(sanitize "${REGISTRY_PUSH_HOST:-}")"
+          pull_registry="$(sanitize "${REGISTRY_PULL_HOST:-}")"
+          namespace="$(sanitize "${IMAGE_NAMESPACE:-}")"
+          name="$(sanitize "${IMAGE_NAME:-}")"
+          version="$(sanitize "${{ steps.upstream.outputs.version }}")"
+
+          if [ -z "$push_registry" ] || [ -z "$pull_registry" ] || [ -z "$namespace" ] || [ -z "$name" ]; then
+            echo "REGISTRY_PUSH_HOST, REGISTRY_PULL_HOST, IMAGE_NAMESPACE, and IMAGE_NAME variables are required." >&2
+            exit 1
+          fi
+
+          push_image="$push_registry/$namespace/$name"
+          pull_image="$pull_registry/$namespace/$name"
+
+          echo "Push image:"
+          echo "  $push_image:$version"
+          echo "Portainer pull image:"
+          echo "  $pull_image:$version"
+
+      - name: Login to internal Forgejo container registry
+        shell: bash
+        env:
+          REGISTRY_USER: ${{ secrets.REGISTRY_USER }}
+          REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+        run: |
+          set -euo pipefail
+
+          sanitize() {
+            printf '%s' "${1:-}" | tr -d '\r\n'
+          }
+
+          export DOCKER_HOST="$(sanitize "${DOCKER_HOST:-}")"
+          push_registry="$(sanitize "${REGISTRY_PUSH_HOST:-}")"
+          registry_user="$(sanitize "${REGISTRY_USER:-${REGISTRY_USERNAME:-}}")"
+
+          if [ -z "$push_registry" ] || [ -z "$registry_user" ]; then
+            echo "REGISTRY_PUSH_HOST and REGISTRY_USER or REGISTRY_USERNAME are required." >&2
+            exit 1
+          fi
+
+          echo "${{ secrets.REGISTRY_TOKEN }}" | docker login "$push_registry" -u "$registry_user" --password-stdin
+
+      - name: Skip if image already exists
+        id: exists
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sanitize() {
+            printf '%s' "${1:-}" | tr -d '\r\n'
+          }
+
+          export DOCKER_HOST="$(sanitize "${DOCKER_HOST:-}")"
+          push_registry="$(sanitize "${REGISTRY_PUSH_HOST:-}")"
+          namespace="$(sanitize "${IMAGE_NAMESPACE:-}")"
+          name="$(sanitize "${IMAGE_NAME:-}")"
+          version="$(sanitize "${{ steps.upstream.outputs.version }}")"
+
+          if [ -z "$push_registry" ] || [ -z "$namespace" ] || [ -z "$name" ] || [ -z "$version" ]; then
+            echo "REGISTRY_PUSH_HOST, IMAGE_NAMESPACE, IMAGE_NAME, and upstream version are required." >&2
+            exit 1
+          fi
+
+          push_version_tag="$push_registry/$namespace/$name:$version"
+
+          if docker manifest inspect "$push_version_tag" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Image already exists: $push_version_tag"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "Image missing, build required: $push_version_tag"
+          fi
+
+      - name: Create Dockerfile
+        if: steps.exists.outputs.exists != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cat > upstream/Dockerfile <<'EOF'
+          FROM node:20-bookworm-slim AS builder
+
+          WORKDIR /app
+
+          # better-sqlite3 may need native compilation when no prebuilt binary exists.
+          # Keep build tools in the builder stage only.
+          RUN apt-get update \
+            && apt-get install -y --no-install-recommends \
+              python3 \
+              make \
+              g++ \
+            && rm -rf /var/lib/apt/lists/*
+
+          # FreeLLMAPI is an npm workspace project.
+          # Copy the full repo before npm ci so npm can see shared/server/client workspaces.
+          COPY . .
+
+          # Builder stage needs devDependencies because TypeScript/Vite are build tools.
+          RUN npm ci --include=dev
+          RUN npm run build
+
+          # Remove dev dependencies before copying node_modules into runtime image.
+          RUN npm prune --omit=dev
+
+          FROM node:20-bookworm-slim AS runtime
+
+          WORKDIR /app
+
+          ENV NODE_ENV=production
+          ENV PORT=3001
+
+          COPY --from=builder /app/package*.json ./
+          COPY --from=builder /app/node_modules ./node_modules
+
+          COPY --from=builder /app/shared ./shared
+          COPY --from=builder /app/server/package*.json ./server/
+          COPY --from=builder /app/server/node_modules ./server/node_modules
+          COPY --from=builder /app/server/dist ./server/dist
+
+          COPY --from=builder /app/client/package*.json ./client/
+          COPY --from=builder /app/client/dist ./client/dist
+
+          EXPOSE 3001
+
+          CMD ["npm", "run", "start", "-w", "server"]
+          EOF
+
+          echo "Dockerfile generated inside upstream build context."
+
+      - name: Build image
+        if: steps.exists.outputs.exists != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sanitize() {
+            printf '%s' "${1:-}" | tr -d '\r\n'
+          }
+
+          export DOCKER_HOST="$(sanitize "${DOCKER_HOST:-}")"
+          push_registry="$(sanitize "${REGISTRY_PUSH_HOST:-}")"
+          namespace="$(sanitize "${IMAGE_NAMESPACE:-}")"
+          name="$(sanitize "${IMAGE_NAME:-}")"
+          version="$(sanitize "${{ steps.upstream.outputs.version }}")"
+          short_sha="$(sanitize "${{ steps.upstream.outputs.short_sha }}")"
+          full_sha="$(sanitize "${{ steps.upstream.outputs.full_sha }}")"
+
+          if [ -z "$push_registry" ] || [ -z "$namespace" ] || [ -z "$name" ] || [ -z "$version" ] || [ -z "$short_sha" ] || [ -z "$full_sha" ]; then
+            echo "Registry/image variables and upstream outputs are required." >&2
+            exit 1
+          fi
+
+          push_image="$push_registry/$namespace/$name"
+          push_version_tag="$push_image:$version"
+          push_sha_tag="$push_image:sha-$short_sha"
+          push_latest_tag="$push_image:latest"
+
+          docker build \
+            --label org.opencontainers.image.source="https://github.com/tashfeenahmed/freellmapi" \
+            --label org.opencontainers.image.revision="$full_sha" \
+            --label org.opencontainers.image.version="$version" \
+            -t "$push_version_tag" \
+            -t "$push_sha_tag" \
+            -t "$push_latest_tag" \
+            upstream
+
+      - name: Push image locally
+        if: steps.exists.outputs.exists != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sanitize() {
+            printf '%s' "${1:-}" | tr -d '\r\n'
+          }
+
+          export DOCKER_HOST="$(sanitize "${DOCKER_HOST:-}")"
+          push_registry="$(sanitize "${REGISTRY_PUSH_HOST:-}")"
+          namespace="$(sanitize "${IMAGE_NAMESPACE:-}")"
+          name="$(sanitize "${IMAGE_NAME:-}")"
+          version="$(sanitize "${{ steps.upstream.outputs.version }}")"
+          short_sha="$(sanitize "${{ steps.upstream.outputs.short_sha }}")"
+
+          if [ -z "$push_registry" ] || [ -z "$namespace" ] || [ -z "$name" ] || [ -z "$version" ] || [ -z "$short_sha" ]; then
+            echo "Registry/image variables and upstream outputs are required." >&2
+            exit 1
+          fi
+
+          push_image="$push_registry/$namespace/$name"
+          push_version_tag="$push_image:$version"
+          push_sha_tag="$push_image:sha-$short_sha"
+          push_latest_tag="$push_image:latest"
+
+          docker push "$push_version_tag"
+          docker push "$push_sha_tag"
+          docker push "$push_latest_tag"
+
+      - name: Cleanup local FreeLLMAPI image tags only
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sanitize() {
+            printf '%s' "${1:-}" | tr -d '\r\n'
+          }
+
+          export DOCKER_HOST="$(sanitize "${DOCKER_HOST:-}")"
+          push_registry="$(sanitize "${REGISTRY_PUSH_HOST:-}")"
+          namespace="$(sanitize "${IMAGE_NAMESPACE:-}")"
+          name="$(sanitize "${IMAGE_NAME:-}")"
+          version="$(sanitize "${{ steps.upstream.outputs.version }}")"
+          short_sha="$(sanitize "${{ steps.upstream.outputs.short_sha }}")"
+
+          if [ -n "$push_registry" ] && [ -n "$namespace" ] && [ -n "$name" ] && [ -n "$version" ] && [ -n "$short_sha" ]; then
+            push_image="$push_registry/$namespace/$name"
+            push_version_tag="$push_image:$version"
+            push_sha_tag="$push_image:sha-$short_sha"
+            push_latest_tag="$push_image:latest"
+
+            # Safe cleanup for a shared remote Docker daemon:
+            # remove only the exact tags emitted by this workflow. Never run docker prune here.
+            docker image rm "$push_version_tag" >/dev/null 2>&1 || true
+            docker image rm "$push_sha_tag" >/dev/null 2>&1 || true
+            docker image rm "$push_latest_tag" >/dev/null 2>&1 || true
+          fi
+
+      - name: Deployment reminder
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sanitize() {
+            printf '%s' "${1:-}" | tr -d '\r\n'
+          }
+
+          push_registry="$(sanitize "${REGISTRY_PUSH_HOST:-}")"
+          pull_registry="$(sanitize "${REGISTRY_PULL_HOST:-}")"
+          namespace="$(sanitize "${IMAGE_NAMESPACE:-}")"
+          name="$(sanitize "${IMAGE_NAME:-}")"
+          ref="$(sanitize "${{ steps.upstream.outputs.ref }}")"
+          full_sha="$(sanitize "${{ steps.upstream.outputs.full_sha }}")"
+          version="$(sanitize "${{ steps.upstream.outputs.version }}")"
+          short_sha="$(sanitize "${{ steps.upstream.outputs.short_sha }}")"
+
+          if [ -z "$push_registry" ] || [ -z "$pull_registry" ] || [ -z "$namespace" ] || [ -z "$name" ] || [ -z "$ref" ] || [ -z "$full_sha" ] || [ -z "$version" ] || [ -z "$short_sha" ]; then
+            echo "Registry/image variables and upstream outputs are required." >&2
+            exit 1
+          fi
+
+          push_image="$push_registry/$namespace/$name"
+          pull_image="$pull_registry/$namespace/$name"
+          push_version_tag="$push_image:$version"
+          pull_version_tag="$pull_image:$version"
+          pull_sha_tag="$pull_image:sha-$short_sha"
+
+          cat <<MSG
+          FreeLLMAPI image build workflow completed.
+
+          Upstream ref:
+            $ref
+
+          Upstream commit:
+            $full_sha
+
+          Pushed locally as:
+            $push_version_tag
+
+          Use this image in Portainer:
+            $pull_version_tag
+
+          Alternative SHA tag for Portainer:
+            $pull_sha_tag
+
+          Portainer policy: Option A / manual controlled update.
+          This workflow intentionally does not redeploy Portainer.
+
+          Next manual steps:
+            1. Review upstream changes if this is a new image.
+            2. Open Portainer stack: freellmapi.
+            3. Replace the image tag with:
+               $pull_version_tag
+            4. Redeploy the stack.
+            5. Run the FreeLLMAPI health check from a configured project.
+          MSG

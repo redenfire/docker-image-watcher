@@ -1,0 +1,37 @@
+{
+  "provider": {
+    "deepseek": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "DeepSeek API",
+      "options": {
+        "baseURL": "https://api.deepseek.com/v1",
+        "apiKey": "{env:DEEPSEEK_API_KEY}"
+      },
+      "models": {
+        "deepseek-chat": {
+          "name": "DeepSeek Chat"
+        },
+        "deepseek-reasoner": {
+          "name": "DeepSeek Reasoner"
+        }
+      }
+    },
+    "openai": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "OpenAI API Backup",
+      "options": {
+        "baseURL": "https://api.openai.com/v1",
+        "apiKey": "{env:OPENAI_API_KEY}"
+      },
+      "models": {
+        "gpt-5.1-codex-max": {
+          "name": "GPT-5.1 Codex Max"
+        },
+        "gpt-5.1-mini": {
+          "name": "GPT-5.1 Mini"
+        }
+      }
+    }
+  },
+  "model": "deepseek/deepseek-chat"
+}

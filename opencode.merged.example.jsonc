@@ -1,0 +1,114 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+
+  "provider": {
+    "freellmapi": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "FreeLLMAPI Local Gateway",
+      "options": {
+        "baseURL": "{env:FREELLMAPI_BASE_URL}",
+        "apiKey": "{env:FREELLMAPI_API_KEY}"
+      },
+      "models": {
+        "auto": {
+          "name": "FreeLLMAPI Auto Router"
+        }
+      }
+    },
+
+    "deepseek": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "DeepSeek API",
+      "options": {
+        "baseURL": "https://api.deepseek.com/v1",
+        "apiKey": "{env:DEEPSEEK_API_KEY}"
+      },
+      "models": {
+        "deepseek-chat": {
+          "name": "DeepSeek Chat"
+        },
+        "deepseek-reasoner": {
+          "name": "DeepSeek Reasoner"
+        }
+      }
+    },
+
+    "openai": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "OpenAI API Backup",
+      "options": {
+        "baseURL": "https://api.openai.com/v1",
+        "apiKey": "{env:OPENAI_API_KEY}"
+      },
+      "models": {
+        "gpt-5.1-codex-max": {
+          "name": "GPT-5.1 Codex Max"
+        },
+        "gpt-5.1-mini": {
+          "name": "GPT-5.1 Mini"
+        }
+      }
+    }
+  },
+
+  "model": "deepseek/deepseek-chat",
+  "small_model": "freellmapi/auto",
+
+  "mcp": {
+    "gitnexus": {
+      "type": "local",
+      "command": ["gitnexus", "mcp"],
+      "enabled": true,
+      "timeout": 15000
+    }
+  },
+
+  "tools": {
+    "gitnexus_*": false
+  },
+
+  "agent": {
+    "plan": {
+      "description": "Plan project work without editing files or running shell commands.",
+      "mode": "primary",
+      "prompt": "{file:./.opencode/prompts/plan.md}",
+      "model": "deepseek/deepseek-chat",
+      "tools": {
+        "gitnexus_*": true
+      },
+      "permission": {
+        "gitnexus_*": "allow",
+        "edit": "deny",
+        "bash": "deny"
+      }
+    },
+    "build": {
+      "description": "Implement one approved task at a time with controlled shell access.",
+      "mode": "primary",
+      "prompt": "{file:./.opencode/prompts/build.md}",
+      "model": "deepseek/deepseek-chat",
+      "tools": {
+        "gitnexus_*": true
+      },
+      "permission": {
+        "gitnexus_*": "allow",
+        "edit": "allow",
+        "bash": "ask"
+      }
+    },
+    "review": {
+      "description": "Review code and documentation changes without editing files.",
+      "mode": "subagent",
+      "prompt": "{file:./.opencode/prompts/review.md}",
+      "model": "deepseek/deepseek-chat",
+      "tools": {
+        "gitnexus_*": true
+      },
+      "permission": {
+        "gitnexus_*": "allow",
+        "edit": "deny",
+        "bash": "ask"
+      }
+    }
+  }
+}

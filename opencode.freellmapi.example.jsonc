@@ -1,0 +1,18 @@
+{
+  "provider": {
+    "freellmapi": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "FreeLLMAPI Local Gateway",
+      "options": {
+        "baseURL": "{env:FREELLMAPI_BASE_URL}",
+        "apiKey": "{env:FREELLMAPI_API_KEY}"
+      },
+      "models": {
+        "auto": {
+          "name": "FreeLLMAPI Auto Router"
+        }
+      }
+    }
+  },
+  "small_model": "freellmapi/auto"
+}

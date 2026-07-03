@@ -1,0 +1,22 @@
+{
+  "mcp": {
+    "gitnexus": {
+      "type": "local",
+      "command": [
+        "gitnexus",
+        "mcp"
+      ],
+      "enabled": true,
+      "timeout": 15000
+    },
+    "agent_bridge": {
+      "type": "local",
+      "command": [
+        "node",
+        "tools/agent-bridge/server.mjs"
+      ],
+      "enabled": true,
+      "timeout": 15000
+    }
+  }
+}
