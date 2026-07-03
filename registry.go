@@ -78,7 +78,10 @@ func getToken(authHeader, registry, repo string) (string, error) {
 		if scope == "" {
 			scope = "repository:" + repo + ":pull"
 		}
-		url := realm + "?service=" + service + "&scope=" + scope
+		url := realm + "?scope=" + scope
+		if service != "" {
+			url += "&service=" + service
+		}
 		resp, err := httpClient.Get(url)
 		if err != nil {
 			return "", err
