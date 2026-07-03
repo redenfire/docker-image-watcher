@@ -248,7 +248,8 @@ func main() {
 
 	go func() {
 		app.checkAll()
-		ticker := time.NewTicker(10 * time.Minute)
+		checkInterval := getEnvDuration("CHECK_INTERVAL", 10*time.Minute)
+		ticker := time.NewTicker(checkInterval)
 		for range ticker.C {
 			app.checkAll()
 		}
@@ -276,11 +277,18 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	var handler http.Handler = mux
+var handler http.Handler = mux
 	if authUser != "" && authPass != "" {
 		handler = authMiddleware(mux)
 	}
-	srv := &http.Server{Addr: ":" + port, Handler: handler}
+	srv := &http.Server{
+		Addr:              ":" + port,
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
 	go func() {
 		log.Printf("Listening on :%s", port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -470,74 +478,101 @@ func (app *App) checkAll() {
 		})
 	}
 
-	var results []ImageGroup
+	maxWorkers := 5
+	if s := os.Getenv("CHECK_CONCURRENCY"); s != "" {
+		if n, err := strconv.Atoi(s); err == nil && n > 0 {
+			maxWorkers = n
+		}
+	}
+
+	sem := make(chan struct{}, maxWorkers)
+	resultsCh := make(chan ImageGroup, len(groups))
+	var wg sync.WaitGroup
+
 	for imageName, entries := range groups {
-		remoteDigest, remoteErr := getRemoteDigest(imageName)
-		remoteStr := "unknown"
-		if remoteErr == nil {
-			remoteStr = shortenDigest(remoteDigest)
-		}
+		imageName, entries := imageName, entries
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
 
-		var containers []ContainerItem
-		gUpToDate := 0
-		gOutdated := 0
-		for _, e := range entries {
-			item := ContainerItem{
-				ContainerID:   e.cid,
-				ContainerName: e.name,
-			}
-			localDigest, localErr := getImageDigest(e.imgID)
-			if localErr != nil {
-				localDigest, localErr = getLocalDigest(e.imageTag)
-			}
-			if localErr != nil {
-				item.LocalDigest = "unknown"
-				item.Status = "unknown"
-			} else if remoteErr != nil || localDigest != remoteDigest {
-				item.LocalDigest = shortenDigest(localDigest)
-				item.Status = "outdated"
-				gOutdated++
-			} else {
-				item.LocalDigest = shortenDigest(localDigest)
-				item.Status = "uptodate"
-				gUpToDate++
+			remoteDigest, remoteErr := getRemoteDigest(imageName)
+			remoteStr := "unknown"
+			if remoteErr == nil {
+				remoteStr = shortenDigest(remoteDigest)
 			}
 
-			if auto, ok := autoMap[e.cid]; ok {
-				item.AutoUpdate = auto
+			var containers []ContainerItem
+			gUpToDate := 0
+			gOutdated := 0
+			for _, e := range entries {
+				item := ContainerItem{
+					ContainerID:   e.cid,
+					ContainerName: e.name,
+				}
+				localDigest, localErr := getImageDigest(e.imgID)
+				if localErr != nil {
+					localDigest, localErr = getLocalDigest(e.imageTag)
+				}
+				if localErr != nil {
+					item.LocalDigest = "unknown"
+					item.Status = "unknown"
+				} else if remoteErr != nil || localDigest != remoteDigest {
+					item.LocalDigest = shortenDigest(localDigest)
+					item.Status = "outdated"
+					gOutdated++
+				} else {
+					item.LocalDigest = shortenDigest(localDigest)
+					item.Status = "uptodate"
+					gUpToDate++
+				}
+
+				if auto, ok := autoMap[e.cid]; ok {
+					item.AutoUpdate = auto
+				}
+				containers = append(containers, item)
 			}
-			containers = append(containers, item)
-		}
 
-		gStatus := "uptodate"
-		if gOutdated > 0 {
-			gStatus = "outdated"
-		}
-		if gOutdated > 0 && gUpToDate > 0 {
-			gStatus = "partial"
-		}
-		if gOutdated+gUpToDate == 0 {
-			gStatus = "unknown"
-		}
+			gStatus := "uptodate"
+			if gOutdated > 0 {
+				gStatus = "outdated"
+			}
+			if gOutdated > 0 && gUpToDate > 0 {
+				gStatus = "partial"
+			}
+			if gOutdated+gUpToDate == 0 {
+				gStatus = "unknown"
+			}
 
-		results = append(results, ImageGroup{
-			Image:        imageName,
-			RemoteDigest: remoteStr,
-			Status:       gStatus,
-			Containers:   containers,
-		})
+			resultsCh <- ImageGroup{
+				Image:        imageName,
+				RemoteDigest: remoteStr,
+				Status:       gStatus,
+				Containers:   containers,
+			}
+		}()
+	}
+
+	wg.Wait()
+	close(resultsCh)
+
+	var results []ImageGroup
+	for result := range resultsCh {
+		results = append(results, result)
 	}
 
 	app.mu.Lock()
 	app.images = results
 	app.mu.Unlock()
 
+	autoCooldown := getEnvDuration("AUTO_COOLDOWN", 5*time.Minute)
 	for _, g := range results {
 		for _, c := range g.Containers {
 			if c.AutoUpdate && c.Status == "outdated" {
 				app.mu.Lock()
 				last, ok := app.cooldowns[c.ContainerID]
-				cooldown := !ok || time.Since(last) > 5*time.Minute
+				cooldown := !ok || time.Since(last) > autoCooldown
 				if cooldown {
 					app.cooldowns[c.ContainerID] = time.Now()
 				}
@@ -619,14 +654,27 @@ func (app *App) loadAuto() {
 func saveAuto(auto map[string]bool, p string) {
 	data, _ := json.Marshal(auto)
 	if i := strings.LastIndex(p, "/"); i > 0 {
-		os.MkdirAll(p[:i], 0755)
+		os.MkdirAll(p[:i], 0700)
 	}
-	os.WriteFile(p, data, 0644)
+	os.WriteFile(p, data, 0600)
 }
 
 func shortenDigest(d string) string {
 	if len(d) > 17 {
 		return d[:17]
+	}
+	return d
+}
+
+func getEnvDuration(key string, defaultVal time.Duration) time.Duration {
+	s := os.Getenv(key)
+	if s == "" {
+		return defaultVal
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		log.Printf("invalid %s=%q, using default %v", key, s, defaultVal)
+		return defaultVal
 	}
 	return d
 }
