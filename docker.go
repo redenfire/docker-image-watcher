@@ -165,12 +165,12 @@ func getLocalDigest(image string) (string, error) {
 		return "", err
 	}
 	for _, d := range data.RepoDigests {
-		if _, after, ok := strings.Cut(d, "@"); ok {
+		_, after, ok := strings.Cut(d, "@")
+		if ok {
 			return after, nil
 		}
-		return d, nil
 	}
-	return "", fmt.Errorf("no digest found")
+	return "", fmt.Errorf("no valid digest found")
 }
 
 func getImageDigest(imageID string) (string, error) {
