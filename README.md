@@ -32,6 +32,8 @@ services:
       - PORT=8080
       - DOCKER_SOCK=/var/run/docker.sock
       - AUTO_FILE=/data/auto-update.json
+      # - AUTH_USER=admin       # uncomment to enable auth
+      # - AUTH_PASS=changeme
 
 volumes:
   image-watch-data:
@@ -39,11 +41,14 @@ volumes:
 
 ## Features
 
-- Lists running containers with local vs. remote digest comparison
+- Lists running containers grouped by image, with per-container status
 - Supports OCI-compatible registries including Docker Hub, GHCR, Quay, and self-hosted registries
-- One-click update with live progress in web UI
+- One-click update per container or "Update all" per image group, with live progress bars
 - Per-container auto-update toggle persisted to disk
 - Background check every 10 minutes with 5-minute auto-update cooldown
+- i18n with EN/IT language toggle
+- Optional auth via AUTH_USER/AUTH_PASS with login page and HMAC-signed session cookies
+- Excludes own container from listing and blocks self-update
 - Multi-arch container build support for `linux/amd64`, `linux/arm64`, `linux/arm/v7`
 
 ## How It Works
@@ -82,10 +87,13 @@ main.go:updateContainer()
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /api/images` | List tracked running containers |
-| `POST /api/images/{id}/update` | Trigger async pull + recreate |
+| `GET /api/images` | List tracked running containers grouped by image |
+| `POST /api/images/{id}/update` | Trigger async pull + recreate for one container |
 | `POST /api/images/{id}/auto-update` | Toggle per-container auto-update |
 | `GET /api/images/{id}/progress` | Read pull/update progress |
+| `POST /api/groups/update` | Trigger async pull + recreate for all containers of an image |
+| `POST /api/login` | Authenticate and receive session cookie |
+| `POST /api/logout` | Invalidate session cookie |
 | `GET /health` | Health check |
 
 Full reference: [`docs/project/API.md`](docs/project/API.md)
@@ -97,6 +105,8 @@ Full reference: [`docs/project/API.md`](docs/project/API.md)
 | `PORT` | `8080` | HTTP listen port |
 | `DOCKER_SOCK` | `/var/run/docker.sock` | Docker Unix socket path |
 | `AUTO_FILE` | `/data/auto-update.json` | Persisted auto-update state file |
+| `AUTH_USER` | — | Enable HTTP auth (required together with AUTH_PASS) |
+| `AUTH_PASS` | — | Password for HTTP auth |
 
 Details: [`docs/project/CONFIGURATION.md`](docs/project/CONFIGURATION.md)
 
@@ -125,6 +135,8 @@ Details: [`docs/project/BUILD.md`](docs/project/BUILD.md)
 
 > [!WARNING]
 > This container requires access to `/var/run/docker.sock`. That is effectively root-equivalent access to Docker host.
+
+When exposing Image Watch on a network, set `AUTH_USER` and `AUTH_PASS` to enable authenticated access with a login page and HMAC-signed session cookies. Login brute-force is rate-limited (5 failures/min → 30s block).
 
 Mitigations and deployment guidance: [`docs/project/SECURITY.md`](docs/project/SECURITY.md)
 
