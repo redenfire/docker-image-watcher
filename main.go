@@ -18,24 +18,30 @@ import (
 //go:embed web
 var webFS embed.FS
 
-type ImageStatus struct {
+type ContainerItem struct {
 	ContainerID   string `json:"container_id"`
 	ContainerName string `json:"container_name"`
-	Image         string `json:"image"`
 	LocalDigest   string `json:"local_digest"`
-	RemoteDigest  string `json:"remote_digest"`
 	Status        string `json:"status"`
 	AutoUpdate    bool   `json:"auto_update"`
 }
 
+type ImageGroup struct {
+	Image        string          `json:"image"`
+	RemoteDigest string          `json:"remote_digest"`
+	Status       string          `json:"status"`
+	Containers   []ContainerItem `json:"containers"`
+}
+
 type App struct {
-	mu         sync.RWMutex
-	images     []ImageStatus
-	autoFile   string
-	autoSaved  map[string]bool
-	cooldowns  map[string]time.Time
-	progress   sync.Map
-	updating   sync.Map
+	mu        sync.RWMutex
+	images    []ImageGroup
+	autoFile  string
+	autoSaved map[string]bool
+	cooldowns map[string]time.Time
+	progress  sync.Map
+	updating  sync.Map
+	selfCID   string
 }
 
 func main() {
@@ -54,6 +60,10 @@ func main() {
 		cooldowns: make(map[string]time.Time),
 	}
 	app.loadAuto()
+	if host, err := os.Hostname(); err == nil && len(host) >= 12 {
+		app.selfCID = host[:12]
+		log.Printf("self CID: %s", app.selfCID)
+	}
 
 	go func() {
 		app.checkAll()
@@ -68,6 +78,7 @@ func main() {
 	mux.Handle("/", http.FileServer(http.FS(sub)))
 	mux.HandleFunc("/api/images", app.handleImages)
 	mux.HandleFunc("/api/images/", app.handleImageAction)
+	mux.HandleFunc("/api/groups/", app.handleGroupAction)
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
@@ -100,6 +111,28 @@ func (app *App) handleImages(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(app.images)
 }
 
+func (app *App) findContainer(cid string) *ContainerItem {
+	for i := range app.images {
+		for j := range app.images[i].Containers {
+			if app.images[i].Containers[j].ContainerID == cid {
+				return &app.images[i].Containers[j]
+			}
+		}
+	}
+	return nil
+}
+
+func (app *App) findImageByCID(cid string) (imageName, containerName string) {
+	for i := range app.images {
+		for j := range app.images[i].Containers {
+			if app.images[i].Containers[j].ContainerID == cid {
+				return app.images[i].Image, app.images[i].Containers[j].ContainerName
+			}
+		}
+	}
+	return "", ""
+}
+
 func (app *App) handleImageAction(w http.ResponseWriter, r *http.Request) {
 	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/images/"), "/")
 	if len(parts) != 2 {
@@ -108,7 +141,6 @@ func (app *App) handleImageAction(w http.ResponseWriter, r *http.Request) {
 	}
 	cid, action := parts[0], parts[1]
 
-	// progress is read-only
 	if action == "progress" {
 		if r.Method != http.MethodGet {
 			http.Error(w, "method not allowed", 405)
@@ -130,13 +162,7 @@ func (app *App) handleImageAction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	app.mu.RLock()
-	var img *ImageStatus
-	for i := range app.images {
-		if app.images[i].ContainerID == cid {
-			img = &app.images[i]
-			break
-		}
-	}
+	img := app.findContainer(cid)
 	app.mu.RUnlock()
 	if img == nil {
 		http.Error(w, "container not found", 404)
@@ -150,18 +176,57 @@ func (app *App) handleImageAction(w http.ResponseWriter, r *http.Request) {
 	case "auto-update":
 		app.toggleAuto(cid)
 		app.mu.RLock()
-		var on bool
-		for i := range app.images {
-			if app.images[i].ContainerID == cid {
-				on = app.images[i].AutoUpdate
-				break
-			}
-		}
+		c := app.findContainer(cid)
+		on := c != nil && c.AutoUpdate
 		app.mu.RUnlock()
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]bool{"auto_update": on})
 	default:
 		http.Error(w, "unknown action", 400)
+	}
+}
+
+func (app *App) handleGroupAction(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/api/groups/")
+	if path == "" {
+		http.Error(w, "not found", 404)
+		return
+	}
+	if path != "update" {
+		http.Error(w, "unknown action", 400)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", 405)
+		return
+	}
+	var req struct {
+		Image string `json:"image"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Image == "" {
+		http.Error(w, "bad request", 400)
+		return
+	}
+	go app.updateGroup(req.Image)
+	w.Write([]byte(`{"status":"updating"}`))
+}
+
+func (app *App) updateGroup(image string) {
+	app.mu.RLock()
+	var cids []string
+	for _, g := range app.images {
+		if g.Image == image {
+			for _, c := range g.Containers {
+				cids = append(cids, c.ContainerID)
+			}
+			break
+		}
+	}
+	app.mu.RUnlock()
+
+	log.Printf("updating group %s (%d containers)", image, len(cids))
+	for _, cid := range cids {
+		app.updateContainer(cid)
 	}
 }
 
@@ -179,78 +244,121 @@ func (app *App) checkAll() {
 	}
 	app.mu.Unlock()
 
-	var results []ImageStatus
+	type groupEntry struct {
+		cid      string
+		name     string
+		imgID    string
+		imageTag string
+	}
+	groups := make(map[string][]groupEntry)
 	for _, c := range containers {
-		// skip containers with untagged image IDs
 		if strings.HasPrefix(c.Image, "sha256:") {
 			continue
 		}
-		status := ImageStatus{
-			ContainerID:   c.ID[:12],
-			ContainerName: strings.TrimPrefix(c.Names[0], "/"),
-			Image:         c.Image,
+		if app.selfCID != "" && c.ID[:12] == app.selfCID {
+			continue
 		}
 		cleanImage := c.Image
 		if i := strings.Index(cleanImage, "@"); i >= 0 {
 			cleanImage = cleanImage[:i]
 		}
-		if _, _, ok := strings.Cut(cleanImage, ":"); ok {
-			status.Image = cleanImage
-		} else {
-			status.Image = cleanImage + ":latest"
+		if _, _, ok := strings.Cut(cleanImage, ":"); !ok {
+			cleanImage = cleanImage + ":latest"
+		}
+		groups[cleanImage] = append(groups[cleanImage], groupEntry{
+			cid:      c.ID[:12],
+			name:     strings.TrimPrefix(c.Names[0], "/"),
+			imgID:    c.ImageID,
+			imageTag: c.Image,
+		})
+	}
+
+	var results []ImageGroup
+	for imageName, entries := range groups {
+		remoteDigest, remoteErr := getRemoteDigest(imageName)
+		remoteStr := "unknown"
+		if remoteErr == nil {
+			remoteStr = shortenDigest(remoteDigest)
 		}
 
-		localDigest, localErr := getLocalDigest(c.Image)
-		if localErr != nil {
-			status.LocalDigest = "unknown"
-		} else {
-			status.LocalDigest = shortenDigest(localDigest)
+		var containers []ContainerItem
+		gUpToDate := 0
+		gOutdated := 0
+		for _, e := range entries {
+			item := ContainerItem{
+				ContainerID:   e.cid,
+				ContainerName: e.name,
+			}
+			localDigest, localErr := getImageDigest(e.imgID)
+			if localErr != nil {
+				localDigest, localErr = getLocalDigest(e.imageTag)
+			}
+			if localErr != nil {
+				item.LocalDigest = "unknown"
+				item.Status = "unknown"
+			} else if remoteErr != nil || localDigest != remoteDigest {
+				item.LocalDigest = shortenDigest(localDigest)
+				item.Status = "outdated"
+				gOutdated++
+			} else {
+				item.LocalDigest = shortenDigest(localDigest)
+				item.Status = "uptodate"
+				gUpToDate++
+			}
+
+			if auto, ok := autoMap[e.cid]; ok {
+				item.AutoUpdate = auto
+			}
+			containers = append(containers, item)
 		}
 
-		remoteDigest, remoteErr := getRemoteDigest(status.Image)
-		if remoteErr != nil {
-			status.RemoteDigest = "unknown"
-		} else {
-			status.RemoteDigest = shortenDigest(remoteDigest)
+		gStatus := "uptodate"
+		if gOutdated > 0 {
+			gStatus = "outdated"
+		}
+		if gOutdated > 0 && gUpToDate > 0 {
+			gStatus = "partial"
+		}
+		if gOutdated+gUpToDate == 0 {
+			gStatus = "unknown"
 		}
 
-		if localErr != nil || remoteErr != nil {
-			status.Status = "unknown"
-		} else if localDigest != remoteDigest {
-			status.Status = "outdated"
-		} else {
-			status.Status = "uptodate"
-		}
-
-		if auto, ok := autoMap[c.ID[:12]]; ok {
-			status.AutoUpdate = auto
-		}
-
-		results = append(results, status)
+		results = append(results, ImageGroup{
+			Image:        imageName,
+			RemoteDigest: remoteStr,
+			Status:       gStatus,
+			Containers:   containers,
+		})
 	}
 
 	app.mu.Lock()
 	app.images = results
 	app.mu.Unlock()
 
-	for _, img := range results {
-		if img.AutoUpdate && img.Status == "outdated" {
-			app.mu.Lock()
-			last, ok := app.cooldowns[img.ContainerID]
-			cooldown := !ok || time.Since(last) > 5*time.Minute
-			if cooldown {
-				app.cooldowns[img.ContainerID] = time.Now()
-			}
-			app.mu.Unlock()
-			if cooldown {
-				log.Printf("auto-updating %s (%s)", img.ContainerName, img.Image)
-				app.updateContainer(img.ContainerID)
+	for _, g := range results {
+		for _, c := range g.Containers {
+			if c.AutoUpdate && c.Status == "outdated" {
+				app.mu.Lock()
+				last, ok := app.cooldowns[c.ContainerID]
+				cooldown := !ok || time.Since(last) > 5*time.Minute
+				if cooldown {
+					app.cooldowns[c.ContainerID] = time.Now()
+				}
+				app.mu.Unlock()
+				if cooldown {
+					log.Printf("auto-updating %s (%s)", c.ContainerName, g.Image)
+					app.updateContainer(c.ContainerID)
+				}
 			}
 		}
 	}
 }
 
 func (app *App) updateContainer(cid string) {
+	if cid == app.selfCID {
+		log.Printf("update %s: skipping self-update", cid)
+		return
+	}
 	if _, loaded := app.updating.LoadOrStore(cid, true); loaded {
 		log.Printf("update %s: already in progress, skipping", cid)
 		return
@@ -258,14 +366,7 @@ func (app *App) updateContainer(cid string) {
 	defer app.updating.Delete(cid)
 
 	app.mu.RLock()
-	var image, containerName string
-	for i := range app.images {
-		if app.images[i].ContainerID == cid {
-			image = app.images[i].Image
-			containerName = app.images[i].ContainerName
-			break
-		}
-	}
+	image, containerName := app.findImageByCID(cid)
 	app.mu.RUnlock()
 
 	if image == "" {
@@ -292,16 +393,20 @@ func (app *App) updateContainer(cid string) {
 }
 
 func (app *App) toggleAuto(cid string) {
+	if cid == app.selfCID {
+		return
+	}
 	app.mu.Lock()
 	defer app.mu.Unlock()
 	for i := range app.images {
-		if app.images[i].ContainerID == cid {
-			app.images[i].AutoUpdate = !app.images[i].AutoUpdate
-			app.autoSaved[cid] = app.images[i].AutoUpdate
-			break
+		for j := range app.images[i].Containers {
+			if app.images[i].Containers[j].ContainerID == cid {
+				app.images[i].Containers[j].AutoUpdate = !app.images[i].Containers[j].AutoUpdate
+				app.autoSaved[cid] = app.images[i].Containers[j].AutoUpdate
+				return
+			}
 		}
 	}
-	saveAuto(app.autoSaved, app.autoFile)
 }
 
 func (app *App) loadAuto() {

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Image Watch</title>
+<title>Docker Image Watcher</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background: #0f172a; color: #e2e8f0; padding: 20px; }
@@ -14,14 +14,21 @@ th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid #334155;
 th { background: #334155; font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; }
 tr:last-child td { border: 0; }
 td { font-size: .875rem; font-family: "SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace; }
+.group-row td { border-bottom: 0; padding-bottom: 2px; background: #1a2333; }
+.group-row + .child-row td { padding-top: 2px; }
+.child-row td:first-child { padding-left: 28px; }
+.child-row:last-child td { border-bottom: 1px solid #334155; }
 .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: .75rem; font-weight: 600; }
 .badge-uptodate { background: #064e3b; color: #6ee7b7; }
 .badge-outdated { background: #7c2d12; color: #fdba74; }
+.badge-partial { background: #713f12; color: #fcd34d; }
 .badge-unknown { background: #1e293b; color: #94a3b8; border: 1px solid #475569; }
 .btn { padding: 6px 14px; border: 0; border-radius: 6px; cursor: pointer; font-size: .8rem; font-weight: 500; transition: opacity .15s; display: inline-flex; align-items: center; gap: 4px; }
 .btn:disabled { opacity: .4; cursor: not-allowed; }
 .btn-update { background: #2563eb; color: #fff; }
 .btn-update:hover:not(:disabled) { background: #1d4ed8; }
+.btn-group { background: #7c3aed; color: #fff; }
+.btn-group:hover:not(:disabled) { background: #6d28d9; }
 .progress-cell { min-width: 160px; }
 .progress-bar { display: flex; align-items: center; gap: 6px; font-size: .75rem; }
 .progress-bar .bar { flex: 1; height: 6px; background: #334155; border-radius: 3px; overflow: hidden; }
@@ -38,17 +45,20 @@ td { font-size: .875rem; font-family: "SFMono-Regular",Consolas,"Liberation Mono
 .status-bar .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
 .dot-green { background: #22c55e; }
 .dot-red { background: #ef4444; }
+.dot-yellow { background: #eab308; }
 .dot-gray { background: #64748b; }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
 .checking .dot { animation: pulse 1.5s infinite; }
 .empty { padding: 40px; text-align: center; color: #64748b; }
 .empty p { margin-top: 8px; font-size: .85rem; }
+.name-cell { max-width: 300px; overflow: hidden; text-overflow: ellipsis; }
+.container-name { color: #94a3b8; }
 </style>
 </head>
 <body>
-<h1>🐳 Image Watch <small id="status"></small> <label style="margin-left:auto;font-size:.8rem;font-weight:400;display:flex;align-items:center;gap:6px;cursor:pointer">Hide up to date <div class="toggle on" id="hideToggle"></div></label></h1>
+<h1>🐳 <span id="appTitle">Docker Image Watcher</span> <small id="status"></small> <span style="margin-left:auto;display:flex;align-items:center;gap:8px"><a href="#" id="langSwitch" style="color:#64748b;text-decoration:none;font-size:.75rem" onclick="switchLang();return false">IT</a><label style="font-size:.8rem;font-weight:400;display:flex;align-items:center;gap:6px;cursor:pointer"><span id="hideLabel">Hide up to date</span> <div class="toggle on" id="hideToggle"></div></label></span></h1>
 <table><thead><tr>
-<th>Container</th><th>Image</th><th>Local</th><th>Remote</th><th>Status</th><th>Auto</th><th></th>
+<th id="thImage">Image / Container</th><th id="thDigest">Digest</th><th id="thStatus">Status</th><th id="thAuto">Auto</th><th></th>
 </tr></thead><tbody id="rows"></tbody></table>
 <div class="status-bar" id="bar">
 <span id="counts"></span>
@@ -60,56 +70,145 @@ const POLL = 10000;
 let updating = new Set();
 let showAll = false;
 
+let lang = (navigator.language || 'en').startsWith('it') ? 'it' : 'en';
+document.getElementById('langSwitch').textContent = lang === 'en' ? 'IT' : 'EN';
+
+const i18n = {
+  en: {
+    title: 'Docker Image Watcher',
+    hide: 'Hide up to date',
+    image: 'Image / Container',
+    digest: 'Digest',
+    status: 'Status',
+    auto: 'Auto',
+    checking: '⏳ checking...',
+    images: n => `✅ ${n} images`,
+    error: '❌ connection error',
+    empty: 'No running containers found',
+    emptyHint: 'Make sure the Docker socket is mounted and containers are running',
+    uptodate: '✅ Up to date',
+    outdated: '🔄 Update available',
+    partial: '⚠️ Partial',
+    unknown: '❓ Unknown',
+    update: 'Update',
+    updateAll: (n) => `Update all (${n})`,
+    lastCheck: 'Last check: ',
+    upToDate: 'up to date',
+    outdatedLabel: 'outdated',
+    partialLabel: 'partial',
+    unknownLabel: 'unknown',
+    connecting: 'connecting...',
+    errorLabel: 'Error',
+    updatingLabel: '⏳ updating...',
+    recreating: 'recreating',
+    noProgress: 'no progress',
+  },
+  it: {
+    title: 'Docker Image Watcher',
+    hide: 'Nascondi aggiornati',
+    image: 'Immagine / Container',
+    digest: 'Digest',
+    status: 'Stato',
+    auto: 'Auto',
+    checking: '⏳ controllo...',
+    images: n => `✅ ${n} immagini`,
+    error: '❌ errore di connessione',
+    empty: 'Nessun container in esecuzione',
+    emptyHint: 'Assicurati che il socket Docker sia montato e che i container siano attivi',
+    uptodate: '✅ Aggiornato',
+    outdated: '🔄 Aggiornamento disp.',
+    partial: '⚠️ Parziale',
+    unknown: '❓ Sconosciuto',
+    update: 'Aggiorna',
+    updateAll: (n) => `Aggiorna tutti (${n})`,
+    lastCheck: 'Ultimo controllo: ',
+    upToDate: 'aggiornati',
+    outdatedLabel: 'da aggiornare',
+    partialLabel: 'parziali',
+    unknownLabel: 'sconosciuti',
+    connecting: 'connessione...',
+    errorLabel: 'Errore',
+    updatingLabel: '⏳ aggiornamento...',
+    recreating: 'ricreazione',
+    noProgress: 'nessun progresso',
+  }
+};
+
+const t = new Proxy({}, { get: (_, k) => { const v = i18n[lang][k]; return typeof v === 'function' ? (...a) => v(...a) : v; } });
+document.title = i18n[lang].title;
+
 document.getElementById('hideToggle').addEventListener('click', function() {
   this.classList.toggle('on');
-  showAll = this.classList.contains('on');
+  showAll = !this.classList.contains('on');
   load();
 });
 
+function applyL10N() {
+  document.getElementById('appTitle').textContent = t.title;
+  document.getElementById('hideLabel').textContent = t.hide;
+  document.getElementById('thImage').textContent = t.image;
+  document.getElementById('thDigest').textContent = t.digest;
+  document.getElementById('thStatus').textContent = t.status;
+  document.getElementById('thAuto').textContent = t.auto;
+}
+
 async function load() {
   const bar = document.getElementById('status');
-  bar.textContent = '⏳ checking...';
+  bar.textContent = t.checking;
   bar.parentElement.classList.add('checking');
   try {
     const res = await fetch('/api/images');
-    const images = await res.json();
-    render(images);
-    bar.textContent = `✅ ${images.length} images`;
+    const groups = await res.json();
+    render(groups);
+    bar.textContent = t.images(groups.length);
   } catch(e) {
-    bar.textContent = '❌ connection error';
+    bar.textContent = t.error;
   }
   bar.parentElement.classList.remove('checking');
 }
 
-function render(images) {
+function render(groups) {
   const tbody = document.getElementById('rows');
-  const counts = { uptodate: 0, outdated: 0, unknown: 0 };
+  const counts = { uptodate: 0, outdated: 0, unknown: 0, partial: 0 };
   let html = '';
-  if (images.length === 0) {
-    html = '<tr><td colspan="7"><div class="empty">No running containers found<br><p>Make sure the Docker socket is mounted and containers are running</p></div></td></tr>';
+  if (groups.length === 0) {
+    html = '<tr><td colspan="5"><div class="empty">' + esc(t.empty) + '<br><p>' + esc(t.emptyHint) + '</p></div></td></tr>';
   } else {
-    for (const img of images) {
-      if (!showAll && img.status === 'uptodate') continue;
-      counts[img.status] = (counts[img.status] || 0) + 1;
-      const badgeClass = 'badge-' + img.status;
-      const badgeLabel = { uptodate: '✅ Up to date', outdated: '🔄 Update available', unknown: '❓ Unknown' }[img.status] || img.status;
-      const isUpdating = updating.has(img.container_id);
-      html += `<tr>
-        <td>${esc(img.container_name)}</td>
-        <td style="font-size:.8rem">${esc(img.image)}</td>
-        <td class="digest">${esc(img.local_digest)}</td>
-        <td class="digest">${esc(img.remote_digest)}</td>
-        <td><span class="badge ${badgeClass}">${badgeLabel}</span></td>
-        <td><div class="toggle ${img.auto_update ? 'on' : ''}" data-cid="${esc(img.container_id)}" onclick="toggle(this)"></div></td>
-        <td><div class="progress-cell" id="progress-${esc(img.container_id)}">${isUpdating ? '<div class="progress-bar"><div class="bar"><div class="fill" style="width:0%"></div></div><span class="pct">0%</span></div>' : `<button class="btn btn-update" data-cid="${esc(img.container_id)}" onclick="doUpdate(this)" ${img.status !== 'outdated' ? 'disabled' : ''}>Update</button>`}</div></td></tr>`;
+    for (const g of groups) {
+      if (!showAll && g.status === 'uptodate') continue;
+      counts[g.status] = (counts[g.status] || 0) + 1;
+      const gBadgeClass = 'badge-' + g.status;
+      const badgeMap = { uptodate: t.uptodate, outdated: t.outdated, partial: t.partial, unknown: t.unknown };
+      const gBadgeLabel = badgeMap[g.status] || g.status;
+      const total = g.containers.length;
+      const outdated = g.containers.filter(c => c.status === 'outdated').length;
+      html += `<tr class="group-row">
+        <td class="name-cell"><strong>${esc(g.image)}</strong></td>
+        <td class="digest">${esc(g.remote_digest)}</td>
+        <td><span class="badge ${gBadgeClass}">${gBadgeLabel}</span></td>
+        <td></td>
+        <td>${outdated > 0 ? `<button class="btn btn-group" data-image="${esc(g.image)}" onclick="doGroupUpdate(this)">${esc(t.updateAll(total))}</button>` : ''}</td>
+      </tr>`;
+      for (const c of g.containers) {
+        if (!showAll && c.status === 'uptodate') continue;
+        const isUpdating = updating.has(c.container_id);
+        html += `<tr class="child-row">
+          <td class="name-cell"><span class="container-name">├─ ${esc(c.container_name)}</span></td>
+          <td class="digest">${esc(c.local_digest)}</td>
+          <td></td>
+          <td><div class="toggle ${c.auto_update ? 'on' : ''}" data-cid="${esc(c.container_id)}" onclick="toggle(this)"></div></td>
+          <td><div class="progress-cell" id="progress-${esc(c.container_id)}">${isUpdating ? '<div class="progress-bar"><div class="bar"><div class="fill" style="width:0%"></div></div><span class="pct">0%</span></div>' : `<button class="btn btn-update" data-cid="${esc(c.container_id)}" onclick="doUpdate(this)" ${c.status !== 'outdated' ? 'disabled' : ''}>${esc(t.update)}</button>`}</div></td>
+        </tr>`;
+      }
     }
   }
   tbody.innerHTML = html;
   document.getElementById('counts').innerHTML = `
-    <span><span class="dot dot-green"></span>${counts.uptodate || 0} up to date</span>
-    <span><span class="dot dot-red"></span>${counts.outdated || 0} outdated</span>
-    <span><span class="dot dot-gray"></span>${counts.unknown || 0} unknown</span>`;
-  document.getElementById('lastCheck').textContent = 'Last check: ' + new Date().toLocaleTimeString();
+    <span><span class="dot dot-green"></span>${counts.uptodate || 0} ${esc(t.upToDate)}</span>
+    <span><span class="dot dot-red"></span>${counts.outdated || 0} ${esc(t.outdatedLabel)}</span>
+    <span><span class="dot dot-yellow"></span>${counts.partial || 0} ${esc(t.partialLabel)}</span>
+    <span><span class="dot dot-gray"></span>${counts.unknown || 0} ${esc(t.unknownLabel)}</span>`;
+  document.getElementById('lastCheck').textContent = t.lastCheck + new Date().toLocaleTimeString();
 }
 
 async function toggle(el) {
@@ -125,7 +224,7 @@ async function toggle(el) {
 }
 
 async function doUpdate(btn) {
-  const cid = btn.closest('tr').querySelector('.toggle').dataset.cid;
+  const cid = btn.dataset.cid;
   updating.add(cid);
   btn.disabled = true;
   const cell = document.getElementById('progress-' + cid);
@@ -134,7 +233,23 @@ async function doUpdate(btn) {
     await fetch(`/api/images/${cid}/update`, { method: 'POST' });
     pollProgress(cid);
   } catch(e) {
-    cell.innerHTML = 'Error';
+    cell.innerHTML = esc(t.errorLabel);
+  }
+}
+
+async function doGroupUpdate(btn) {
+  const image = btn.dataset.image;
+  btn.disabled = true;
+  btn.textContent = t.updatingLabel;
+  try {
+    await fetch('/api/groups/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image })
+    });
+    setTimeout(load, 2000);
+  } catch(e) {
+    btn.textContent = t.errorLabel;
   }
 }
 
@@ -146,7 +261,8 @@ async function pollProgress(cid) {
     if (!res.ok) { updating.delete(cid); load(); return; }
     const p = await res.json();
     if (p.status === 'error' || p.status === 'recreating') {
-      cell.innerHTML = `<div class="progress-bar"><div class="bar"><div class="fill" style="width:${p.percent}%"></div></div><span class="pct">${p.percent}%</span> <span style="color:#94a3b8;font-size:.7rem">${p.status}</span></div>`;
+      const statusLabel = p.status === 'recreating' ? t.recreating : (p.status.startsWith('error') ? p.status.replace('error: ', t.errorLabel + ': ') : p.status);
+      cell.innerHTML = `<div class="progress-bar"><div class="bar"><div class="fill" style="width:${p.percent}%"></div></div><span class="pct">${p.percent}%</span> <span style="color:#94a3b8;font-size:.7rem">${esc(statusLabel)}</span></div>`;
       if (p.status === 'recreating') {
         setTimeout(() => { updating.delete(cid); load(); }, 1000);
         return;
@@ -156,7 +272,7 @@ async function pollProgress(cid) {
         return;
       }
     } else if (p.status === 'connecting') {
-      cell.innerHTML = '<div class="progress-bar"><span class="spinner"></span><span style="color:#94a3b8;font-size:.7rem">connecting...</span></div>';
+      cell.innerHTML = '<div class="progress-bar"><span class="spinner"></span><span style="color:#94a3b8;font-size:.7rem">' + esc(t.connecting) + '</span></div>';
     } else {
       cell.innerHTML = `<div class="progress-bar"><div class="bar"><div class="fill" style="width:${p.percent}%"></div></div><span class="pct">${p.percent}%</span></div>`;
     }
@@ -176,8 +292,17 @@ function esc(s) {
   return d.innerHTML;
 }
 
+applyL10N();
 load();
 setInterval(load, POLL);
+
+function switchLang() {
+  lang = lang === 'en' ? 'it' : 'en';
+  document.getElementById('langSwitch').textContent = lang === 'en' ? 'IT' : 'EN';
+  document.title = i18n[lang].title;
+  applyL10N();
+  load();
+}
 </script>
 </body>
 </html>

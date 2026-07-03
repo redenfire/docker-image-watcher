@@ -16,9 +16,10 @@ import (
 var dockerSocket = "/var/run/docker.sock"
 
 type dockerContainer struct {
-	ID    string   `json:"Id"`
-	Names []string `json:"Names"`
-	Image string   `json:"Image"`
+	ID      string   `json:"Id"`
+	Names   []string `json:"Names"`
+	Image   string   `json:"Image"`
+	ImageID string   `json:"ImageID"`
 }
 
 type dockerInspect struct {
@@ -148,6 +149,27 @@ func pullImageStream(image string, progressFn func(PullProgress)) error {
 
 func getLocalDigest(image string) (string, error) {
 	resp, err := dockerAPI("GET", "/images/"+image+"/json", nil)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	var data struct {
+		RepoDigests []string `json:"RepoDigests"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		return "", err
+	}
+	for _, d := range data.RepoDigests {
+		if _, after, ok := strings.Cut(d, "@"); ok {
+			return after, nil
+		}
+		return d, nil
+	}
+	return "", fmt.Errorf("no digest found")
+}
+
+func getImageDigest(imageID string) (string, error) {
+	resp, err := dockerAPI("GET", "/images/"+imageID+"/json", nil)
 	if err != nil {
 		return "", err
 	}

@@ -1,4 +1,4 @@
-# 🐳 Image Watch
+# 🐳 Docker Image Watcher
 
 Minimal Docker image update monitor with web UI. Checks running containers against their registry, shows outdated images, and can auto-update.
 
