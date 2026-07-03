@@ -40,6 +40,12 @@ Acceptance criteria:
 - `agent_bridge` visibility is checked in both endpoints after session restart.
 - Any endpoint-specific config mismatch is documented in repo docs.
 
+Current progress:
+
+- `opencode mcp list` now shows both `gitnexus` and `agent_bridge` after local `tools/agent-bridge` dependency install and local-only `opencode.json` alignment.
+- `gitnexus status` works from project root, so Caveman CLI fallback is available if MCP tools are not exposed in-session.
+- Interactive Caveman-session MCP visibility is still pending manual verification in a fresh session.
+
 Files likely involved:
 
 - `docs/STATUS.md`

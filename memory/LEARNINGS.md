@@ -94,3 +94,21 @@ Files/components affected:
 - `docs/STATUS.md`
 - `AGENTS.md`
 - `CLAUDE.md`
+
+### 2026-07-03 - OpenCode broker visibility depends on repo-local agent-bridge dependencies
+
+What was learned:
+
+`opencode mcp list` showed `agent_bridge` as failed until `tools/agent-bridge` dependencies were installed locally. After `cd tools/agent-bridge && npm install`, OpenCode immediately showed both `gitnexus` and `agent_bridge` as connected.
+
+Why it matters:
+
+OpenCode MCP visibility for repo-local brokers is not just a config problem; dependency install state under the tool folder can be the entire cause of a missing or closed MCP connection.
+
+Files/components affected:
+
+- `tools/agent-bridge/package.json`
+- `tools/agent-bridge/package-lock.json`
+- `docs/AGENT_BRIDGE.md`
+- `docs/TASKS.md`
+- local-only `opencode.json`
