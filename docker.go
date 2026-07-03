@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -86,7 +87,9 @@ type PullProgress struct {
 }
 
 func pullImageStream(image string, progressFn func(PullProgress)) error {
-	resp, err := dockerAPI("POST", "/images/create?fromImage="+image, nil)
+	v := url.Values{}
+	v.Set("fromImage", image)
+	resp, err := dockerAPI("POST", "/images/create?"+v.Encode(), nil)
 	if err != nil {
 		return fmt.Errorf("pull request: %w", err)
 	}
