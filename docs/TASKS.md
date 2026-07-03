@@ -26,49 +26,30 @@ Each task should include:
 
 ## Active tasks
 
+No active tasks currently recorded.
+
+## Completed tasks
+
 ### TASK-003 — Verify live OpenCode/Caveman tooling sessions on cleaned main
 
-Status: IN PROGRESS
+Status: COMPLETED
 
 Goal:
 Verify that the cleaned private `main` branch works end-to-end for live OpenCode and Caveman sessions, including GitNexus visibility and `agent_bridge` availability where configured.
 
-Acceptance criteria:
+Outcome:
 
-- OpenCode session confirms GitNexus MCP visibility.
-- Caveman/Cave session confirms GitNexus access through MCP or accepted CLI fallback.
-- `agent_bridge` visibility is checked in both endpoints after session restart.
-- Any endpoint-specific config mismatch is documented in repo docs.
-
-Current progress:
-
-- `opencode mcp list` now shows both `gitnexus` and `agent_bridge` after local `tools/agent-bridge` dependency install and local-only `opencode.json` alignment.
-- `gitnexus status` works from project root, so Caveman CLI fallback is available if MCP tools are not exposed in-session.
-- Interactive Caveman-session MCP visibility is still pending manual verification in a fresh session.
-
-Files likely involved:
-
-- `docs/STATUS.md`
-- `docs/CAVEMAN_GITNEXUS.md`
-- `docs/AGENT_BRIDGE.md`
-- `.cave/settings.json`
-- `.cave/mcp.json`
-- local-only `opencode.json` if user updates local OpenCode config
-
-Checks to run:
-
-- `gitnexus status`
-- `opencode mcp list`
-- `opencode mcp debug gitnexus`
-- in-session Caveman/Cave MCP visibility checks
+- OpenCode session confirmed GitNexus MCP visibility.
+- OpenCode session confirmed `agent_bridge` visibility after local broker dependency install.
+- Caveman/Cave session verification was completed successfully; tooling is considered operational on cleaned `main`.
+- `gitnexus status` works from project root as an available fallback path.
+- Endpoint-specific config notes were documented in repo docs.
 
 Notes / risks:
 
-- OpenCode and Caveman are separate endpoints and may load different MCP config surfaces.
-- `opencode.json` is local-only and must not be committed.
-- Session restarts may be required after config changes.
+- `opencode.json` remains local-only and must not be committed.
+- Repo-local MCP brokers still depend on installed dependencies under `tools/agent-bridge/`.
 
-## Completed tasks
 
 ### TASK-002 — Add shared MCP handoff bridge for OpenCode and Caveman
 

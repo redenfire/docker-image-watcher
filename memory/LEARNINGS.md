@@ -112,3 +112,19 @@ Files/components affected:
 - `docs/AGENT_BRIDGE.md`
 - `docs/TASKS.md`
 - local-only `opencode.json`
+
+### 2026-07-03 - Cleaned main now has working OpenCode and Caveman tooling path
+
+What was learned:
+
+After upstream sync cleanup, the repo's private `main` branch can support both OpenCode MCP usage and Caveman session usage successfully. GitNexus works from the project root, `agent_bridge` works once local broker dependencies are installed, and the cleaned branch passes Forgejo build.
+
+Why it matters:
+
+Future task work can proceed from cleaned `main` without treating the tooling stack as a blocker. Remaining gaps are optimization/documentation issues, not baseline operability.
+
+Files/components affected:
+
+- `docs/STATUS.md`
+- `docs/TASKS.md`
+- `memory/LEARNINGS.md`
