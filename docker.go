@@ -95,7 +95,10 @@ func pullImageStream(image string, progressFn func(PullProgress)) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("read error body: %w", err)
+		}
 		return fmt.Errorf("pull failed: %s %s", resp.Status, strings.TrimSpace(string(body)))
 	}
 
@@ -279,7 +282,10 @@ func recreateContainer(id, image string) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
-		b, _ := io.ReadAll(resp.Body)
+		b, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("read create error body: %w", err)
+		}
 		return fmt.Errorf("create failed: %s %s", resp.Status, string(b))
 	}
 	var created struct {
