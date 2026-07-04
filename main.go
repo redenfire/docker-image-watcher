@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -568,6 +569,9 @@ func (app *App) checkAll() {
 	for result := range resultsCh {
 		results = append(results, result)
 	}
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Image < results[j].Image
+	})
 
 	app.mu.Lock()
 	app.images = results
