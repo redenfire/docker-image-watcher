@@ -12,6 +12,11 @@ services:
       - PORT=8080
       - DOCKER_SOCK=/var/run/docker.sock
       - AUTO_FILE=/data/auto-update.json
+      # - CHECK_INTERVAL=10m      # default: 10m
+      # - CHECK_CONCURRENCY=5     # default: 5
+      # - AUTO_COOLDOWN=5m        # default: 5m
+      # - AUTH_USER=admin         # uncomment to enable auth
+      # - AUTH_PASS=changeme
 
 volumes:
   image-watch-data:
