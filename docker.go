@@ -201,7 +201,9 @@ func recreateContainer(id, image string) error {
 	}
 
 	createBody := make(map[string]interface{})
-	json.Unmarshal(inspect.Config, &createBody)
+	if err := json.Unmarshal(inspect.Config, &createBody); err != nil {
+		return fmt.Errorf("unmarshal container config: %w", err)
+	}
 	createBody["Image"] = image
 	delete(createBody, "Hostname")
 
@@ -227,7 +229,9 @@ func recreateContainer(id, image string) error {
 	}
 
 	var hc hostCfg
-	json.Unmarshal(inspect.HostConfig, &hc)
+	if err := json.Unmarshal(inspect.HostConfig, &hc); err != nil {
+		return fmt.Errorf("unmarshal host config: %w", err)
+	}
 	createBody["HostConfig"] = hc
 
 	if hc.NetworkMode != "" && hc.NetworkMode != "default" && hc.NetworkMode != "bridge" {
@@ -239,7 +243,10 @@ func recreateContainer(id, image string) error {
 		createBody["NetworkingConfig"] = netConfig
 	}
 
-	body, _ := json.Marshal(createBody)
+	body, err := json.Marshal(createBody)
+	if err != nil {
+		return fmt.Errorf("marshal create body: %w", err)
+	}
 
 	// stop with 10s grace period (best effort — container may already be stopped)
 	resp, err := dockerAPI("POST", "/containers/"+id+"/stop?t=10", nil)
