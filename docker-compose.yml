@@ -17,6 +17,7 @@ services:
       # - AUTO_COOLDOWN=5m        # default: 5m
       # - AUTH_USER=admin         # uncomment to enable auth
       # - AUTH_PASS=changeme
+      # - DOCKER_REGISTRY_AUTH=username:password  # uncomment to avoid Docker Hub unauthenticated pull rate limits
 
 volumes:
   image-watch-data:
