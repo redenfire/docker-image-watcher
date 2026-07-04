@@ -132,7 +132,7 @@ func pullImageStream(image string, progressFn func(PullProgress)) error {
 		if err != nil {
 			return fmt.Errorf("registry auth: %w", err)
 		}
-		req.Header.Set("X-Registry-Auth", base64.URLEncoding.EncodeToString(payload))
+		req.Header.Set("X-Registry-Auth", base64.StdEncoding.EncodeToString(payload))
 	}
 	resp, err := client.Do(req)
 	if err != nil {

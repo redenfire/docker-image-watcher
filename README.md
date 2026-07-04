@@ -101,6 +101,7 @@ main.go:updateContainer()
 | `POST /api/logout` | Invalidate session cookie |
 | `GET /api/auth/status` | Return whether auth is enabled |
 | `GET /health` | Health check |
+| `GET /api/ratelimit` | Check if Docker pull rate limit has been detected (returns `{"rate_limited": true/false}`) |
 
 Full reference: [`docs/project/API.md`](docs/project/API.md)
 
@@ -116,6 +117,7 @@ Full reference: [`docs/project/API.md`](docs/project/API.md)
 | `CHECK_INTERVAL` | `10m` | Background check interval |
 | `CHECK_CONCURRENCY` | `5` | Max concurrent registry requests during check |
 | `AUTO_COOLDOWN` | `5m` | Cooldown between auto-updates for same container |
+| `DOCKER_REGISTRY_AUTH` | — | Docker registry credentials in `username:password` format. When set, sends authenticated pull requests to Docker Engine API via `X-Registry-Auth` header, avoiding unauthenticated Docker Hub pull rate limits. |
 
 Details: [`docs/project/CONFIGURATION.md`](docs/project/CONFIGURATION.md)
 
@@ -160,7 +162,7 @@ The application exposes a `GET /health` endpoint that returns HTTP 200. Since th
 ## Troubleshooting
 
 - Images showing `unknown` status: check Docker socket access and registry connectivity
-- Pull failures: check Docker Hub rate limits or private registry auth state
+- Pull failures or UI rate-limit banner: check Docker Hub rate limits, configure `DOCKER_REGISTRY_AUTH` for authenticated pulls, or wait for rate-limit window to reset
 - Auto-update not triggering: confirm container is `outdated` and not inside cooldown window
 
 More: [`docs/project/TROUBLESHOOTING.md`](docs/project/TROUBLESHOOTING.md)
