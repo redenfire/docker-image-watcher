@@ -98,7 +98,8 @@ jobs:
           sanitize() { printf '%s' "${1:-}" | tr -d '\r\n'; }
           export DOCKER_HOST="$(sanitize "${DOCKER_HOST:-}")"
           cd "${GITHUB_WORKSPACE:-$PWD}"
-          docker build -t "${compile_check_tag}" -f- . <<'EOF'
+          docker pull "${push_base}:latest" || true
+          docker build --cache-from "${push_base}:latest" -t "${compile_check_tag}" -f- . <<'EOF'
           FROM golang:1.22-alpine
           WORKDIR /src
           COPY . .
@@ -110,7 +111,9 @@ jobs:
         run: |
           set -euo pipefail
           cd "${GITHUB_WORKSPACE:-$PWD}"
+          docker pull "${push_base}:latest" || true
           docker build \
+            --cache-from "${push_base}:latest" \
             --label org.opencontainers.image.source="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
             --label org.opencontainers.image.revision="${GITHUB_SHA}" \
             --label org.opencontainers.image.version="${branch_safe}-${short_sha}" \
