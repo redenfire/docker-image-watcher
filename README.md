@@ -49,7 +49,7 @@ volumes:
 - i18n with EN/IT language toggle
 - Optional auth via AUTH_USER/AUTH_PASS with login page and HMAC-signed session cookies
 - Excludes own container from listing and blocks self-update
-- Multi-arch container build support for `linux/amd64`, `linux/arm64`, `linux/arm/v7`
+- Single-arch CI build; multi-arch builds supported locally with Docker Buildx
 
 ## How It Works
 
