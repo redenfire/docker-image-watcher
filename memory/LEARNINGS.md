@@ -128,3 +128,20 @@ Files/components affected:
 - `docs/STATUS.md`
 - `docs/TASKS.md`
 - `memory/LEARNINGS.md`
+
+### 2026-07-04 - Git author email must follow remote destination
+
+What was learned:
+
+This repo needs different author-email behavior depending on where commit history is going. Forgejo `origin` uses the default local email, while GitHub-targeted history (`gh-fork`, and `upstream` if explicitly used) must be created with `-c user.email="n3omod@gmail.com"` on commit-producing commands.
+
+Why it matters:
+
+Pushes do not change author metadata after the fact. The correct email must be applied when the commit is created or rewritten so GitHub-visible attribution is correct without polluting Forgejo-only history.
+
+Files/components affected:
+
+- `.opencode/prompts/caveman-handoff.md`
+- `docs/CONTRIBUTING.md`
+- `memory/CONSTRAINTS.md`
+- `memory/LEARNINGS.md`

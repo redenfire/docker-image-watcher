@@ -16,6 +16,7 @@ It is not for workstation setup, agent installation, or template maintenance not
 - Runtime depends on Docker Engine API through mounted Docker socket.
 - Multi-arch Docker build should remain supported.
 - Current upstream application layout keeps main Go files at repository root.
+- Git author email must follow remote policy: default local email for Forgejo `origin`, `n3omod@gmail.com` for GitHub-targeted commit history.
 
 ## Security constraints
 

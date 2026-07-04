@@ -31,6 +31,13 @@ If `agent_bridge` tools are not available in the active OpenCode or Caveman sess
 5. After Caveman finishes, the user tells OpenCode: `Read tmp/handoff/current-result.md`
 6. OpenCode reads the result and plans the next step.
 
+## Git commit email by remote
+
+- For work destined for GitHub remotes (`gh-fork`, and `upstream` if explicitly used), create commits with `git -c user.email="n3omod@gmail.com" ...` on commit-producing commands.
+- Apply same override to amend, cherry-pick, merge, or rebase-continue steps when they create GitHub-destined commits.
+- For Forgejo `origin`, use the default local email and do not pass `-c user.email`.
+- Pushing alone does not change author metadata; the override matters when a Git command creates or rewrites a commit.
+
 ## Rules
 
 - Prefer `agent_bridge` over file handoff when available.
