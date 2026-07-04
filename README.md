@@ -18,6 +18,7 @@ Open [http://localhost:8099](http://localhost:8099).
 Or use Docker Compose:
 
 ```yaml
+
 services:
   image-watch:
     image: ghcr.io/redenfire/docker-image-watcher:latest
@@ -32,7 +33,10 @@ services:
       - PORT=8080
       - DOCKER_SOCK=/var/run/docker.sock
       - AUTO_FILE=/data/auto-update.json
-      # - AUTH_USER=admin       # uncomment to enable auth
+      # - CHECK_INTERVAL=10m      # default: 10m
+      # - CHECK_CONCURRENCY=5     # default: 5
+      # - AUTO_COOLDOWN=5m        # default: 5m
+      # - AUTH_USER=admin         # uncomment to enable auth
       # - AUTH_PASS=changeme
 
 volumes:
