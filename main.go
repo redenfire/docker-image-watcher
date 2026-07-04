@@ -25,16 +25,16 @@ import (
 var webFS embed.FS
 
 var (
-	authUser   string
-	authPass   string
-	hmacKey    []byte
-	loginMu    sync.Mutex
-	failCount  = make(map[string]*failEntry)
+	authUser  string
+	authPass  string
+	hmacKey   []byte
+	loginMu   sync.Mutex
+	failCount = make(map[string]*failEntry)
 )
 
 type failEntry struct {
-	count       int
-	last        time.Time
+	count        int
+	last         time.Time
 	blockedUntil time.Time
 }
 
@@ -277,7 +277,7 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 	})
 
-var handler http.Handler = mux
+	var handler http.Handler = mux
 	if authUser != "" && authPass != "" {
 		handler = authMiddleware(mux)
 	}
