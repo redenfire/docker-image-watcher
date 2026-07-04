@@ -255,7 +255,10 @@ func main() {
 		}
 	}()
 
-	sub, _ := fs.Sub(webFS, "web")
+	sub, err := fs.Sub(webFS, "web")
+	if err != nil {
+		log.Fatalf("embedded web directory: %v", err)
+	}
 	mux := http.NewServeMux()
 	mux.Handle("/", http.FileServer(http.FS(sub)))
 	mux.HandleFunc("/login.html", func(w http.ResponseWriter, r *http.Request) {
