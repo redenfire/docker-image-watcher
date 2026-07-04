@@ -470,9 +470,13 @@ func (app *App) checkAll() {
 		if _, _, ok := strings.Cut(cleanImage, ":"); !ok {
 			cleanImage = cleanImage + ":latest"
 		}
+		entryName := c.ID[:12]
+		if len(c.Names) > 0 {
+			entryName = strings.TrimPrefix(c.Names[0], "/")
+		}
 		groups[cleanImage] = append(groups[cleanImage], groupEntry{
 			cid:      c.ID[:12],
-			name:     strings.TrimPrefix(c.Names[0], "/"),
+			name:     entryName,
 			imgID:    c.ImageID,
 			imageTag: c.Image,
 		})
