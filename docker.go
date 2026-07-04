@@ -42,6 +42,18 @@ func dockerClient() *http.Client {
 	}
 }
 
+func pullStreamDockerClient() *http.Client {
+	return &http.Client{
+		Transport: &http.Transport{
+			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+				dialer := &net.Dialer{Timeout: 30 * time.Second}
+				return dialer.DialContext(ctx, "unix", dockerSocket)
+			},
+			ResponseHeaderTimeout: 30 * time.Second,
+		},
+	}
+}
+
 func dockerAPI(method, path string, body io.Reader) (*http.Response, error) {
 	client := dockerClient()
 	url := "http://localhost" + path
@@ -130,7 +142,7 @@ func buildRegistryAuthHeader(serverAddress, auth string) (string, error) {
 func pullImageStream(image string, progressFn func(PullProgress)) error {
 	v := url.Values{}
 	v.Set("fromImage", image)
-	client := dockerClient()
+	client := pullStreamDockerClient()
 	req, err := http.NewRequest("POST", "http://localhost/images/create?"+v.Encode(), nil)
 	if err != nil {
 		return fmt.Errorf("pull request: %w", err)
