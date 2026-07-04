@@ -52,6 +52,8 @@ volumes:
 - Background check every 10 minutes with 5-minute auto-update cooldown
 - i18n with EN/IT language toggle
 - Optional auth via AUTH_USER/AUTH_PASS with login page and HMAC-signed session cookies
+- Supports authenticated Docker pulls via `DOCKER_REGISTRY_AUTH`, using either `username:password` for Docker Hub or a JSON registry map for multiple registries
+- Persists last container pull error in UI until a later successful pull clears it
 - Excludes own container from listing and blocks self-update
 - Single-arch CI build; multi-arch builds supported locally with Docker Buildx
 
@@ -117,7 +119,7 @@ Full reference: [`docs/project/API.md`](docs/project/API.md)
 | `CHECK_INTERVAL` | `10m` | Background check interval |
 | `CHECK_CONCURRENCY` | `5` | Max concurrent registry requests during check |
 | `AUTO_COOLDOWN` | `5m` | Cooldown between auto-updates for same container |
-| `DOCKER_REGISTRY_AUTH` | — | Docker registry credentials in `username:password` format. When set, sends authenticated pull requests to Docker Engine API via `X-Registry-Auth` header, avoiding unauthenticated Docker Hub pull rate limits. |
+| `DOCKER_REGISTRY_AUTH` | — | Docker registry auth. Supports `username:password` for Docker Hub only, or a JSON map like `{"ghcr.io":"user:token","https://index.docker.io/v1/":"user:token"}` for multi-registry pulls. |
 
 Details: [`docs/project/CONFIGURATION.md`](docs/project/CONFIGURATION.md)
 
@@ -162,7 +164,7 @@ The application exposes a `GET /health` endpoint that returns HTTP 200. Since th
 ## Troubleshooting
 
 - Images showing `unknown` status: check Docker socket access and registry connectivity
-- Pull failures or UI rate-limit banner: check Docker Hub rate limits, configure `DOCKER_REGISTRY_AUTH` for authenticated pulls, or wait for rate-limit window to reset
+- Pull failures, persistent container error text, or UI rate-limit banner: check Docker Hub rate limits, configure `DOCKER_REGISTRY_AUTH` with Docker Hub shorthand or JSON multi-registry credentials, or wait for rate-limit window to reset
 - Auto-update not triggering: confirm container is `outdated` and not inside cooldown window
 
 More: [`docs/project/TROUBLESHOOTING.md`](docs/project/TROUBLESHOOTING.md)

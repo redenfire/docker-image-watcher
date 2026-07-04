@@ -9,6 +9,7 @@ import (
 	"embed"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"io/fs"
 	"log"
 	"net/http"
@@ -196,6 +197,7 @@ type ContainerItem struct {
 	LocalDigest   string `json:"local_digest"`
 	Status        string `json:"status"`
 	AutoUpdate    bool   `json:"auto_update"`
+	Error         string `json:"error,omitempty"`
 }
 
 type ImageGroup struct {
@@ -206,15 +208,16 @@ type ImageGroup struct {
 }
 
 type App struct {
-	mu          sync.RWMutex
-	images      []ImageGroup
-	autoFile    string
-	autoSaved   map[string]bool
-	cooldowns   map[string]time.Time
-	rateLimited bool
-	progress    sync.Map
-	updating    sync.Map
-	selfCID     string
+	mu              sync.RWMutex
+	images          []ImageGroup
+	autoFile        string
+	autoSaved       map[string]bool
+	cooldowns       map[string]time.Time
+	containerErrors map[string]string
+	rateLimited     bool
+	progress        sync.Map
+	updating        sync.Map
+	selfCID         string
 }
 
 func main() {
@@ -228,9 +231,10 @@ func main() {
 	}
 
 	app := &App{
-		autoFile:  autoFile,
-		autoSaved: make(map[string]bool),
-		cooldowns: make(map[string]time.Time),
+		autoFile:        autoFile,
+		autoSaved:       make(map[string]bool),
+		cooldowns:       make(map[string]time.Time),
+		containerErrors: make(map[string]string),
 	}
 	app.loadAuto()
 	if host, err := os.Hostname(); err == nil && len(host) >= 12 {
@@ -562,6 +566,9 @@ func (app *App) checkAll() {
 				if auto, ok := autoMap[e.cid]; ok {
 					item.AutoUpdate = auto
 				}
+				app.mu.RLock()
+				item.Error = app.containerErrors[e.cid]
+				app.mu.RUnlock()
 				containers = append(containers, item)
 			}
 
@@ -596,9 +603,19 @@ func (app *App) checkAll() {
 		return results[i].Image < results[j].Image
 	})
 
+	rateLimited := sawRateLimit
+	app.mu.RLock()
+	for _, err := range app.containerErrors {
+		if IsRateLimitError(errors.New(err)) {
+			rateLimited = true
+			break
+		}
+	}
+	app.mu.RUnlock()
+
 	app.mu.Lock()
 	app.images = results
-	app.rateLimited = sawRateLimit
+	app.rateLimited = rateLimited
 	app.mu.Unlock()
 
 	autoCooldown := getEnvDuration("AUTO_COOLDOWN", 5*time.Minute)
@@ -644,21 +661,29 @@ func (app *App) updateContainer(cid string) {
 	if err := pullImageStream(image, func(p PullProgress) {
 		app.progress.Store(cid, p)
 	}); err != nil {
+		app.mu.Lock()
+		app.containerErrors[cid] = err.Error()
 		if IsRateLimitError(err) {
-			app.mu.Lock()
 			app.rateLimited = true
-			app.mu.Unlock()
 		}
+		app.mu.Unlock()
 		app.progress.Store(cid, PullProgress{Status: "error: " + err.Error()})
 		log.Printf("pull %s: %v", image, err)
+		app.checkAll()
 		return
 	}
+	app.mu.Lock()
+	delete(app.containerErrors, cid)
+	app.mu.Unlock()
 	app.progress.Store(cid, PullProgress{Status: "recreating", Percent: 100})
 	if err := recreateContainer(cid, image); err != nil {
 		app.progress.Store(cid, PullProgress{Status: "error: " + err.Error()})
 		log.Printf("recreate %s: %v", cid, err)
 		return
 	}
+	app.mu.Lock()
+	delete(app.containerErrors, cid)
+	app.mu.Unlock()
 	app.progress.Delete(cid)
 	log.Printf("updated %s -> %s", containerName, image)
 	app.checkAll()

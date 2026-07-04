@@ -7,7 +7,7 @@
 | `PORT` | `8080` | HTTP listen port for web UI and API |
 | `DOCKER_SOCK` | `/var/run/docker.sock` | Unix socket path used for Docker Engine API |
 | `AUTO_FILE` | `/data/auto-update.json` | JSON file storing per-container auto-update state |
-| `DOCKER_REGISTRY_AUTH` | unset | Optional registry credentials for authenticated Docker Engine pulls; format `username:password` |
+| `DOCKER_REGISTRY_AUTH` | unset | Optional registry credentials for authenticated Docker Engine pulls; supports Docker Hub shorthand or JSON multi-registry map |
 | `CHECK_INTERVAL` | `10m` | Interval for background digest check loop |
 | `CHECK_CONCURRENCY` | `5` | Max concurrent registry requests during check |
 | `AUTO_COOLDOWN` | `5m` | Cooldown window between auto-updates for same container |
@@ -23,9 +23,20 @@
 
 - Read in `docker.go`
 - Optional
-- Format: `username:password`
 - Sent to Docker Engine as `X-Registry-Auth` during image pull requests
+- Supports two formats:
+  - Docker Hub shorthand: `username:password`
+  - JSON multi-registry map: `{"ghcr.io":"user:token","https://index.docker.io/v1/":"user:token"}`
+- Shorthand mode is scoped to Docker Hub aliases only
+- JSON mode lets different registries use different credentials
 - Useful for Docker Hub or private registries that throttle or deny anonymous pulls
+
+Examples:
+
+```env
+DOCKER_REGISTRY_AUTH=mydockeruser:dockerhub-token
+DOCKER_REGISTRY_AUTH={"ghcr.io":"neomod:ghp_example","https://index.docker.io/v1/":"mydockeruser:dockerhub-token"}
+```
 
 ### `CHECK_INTERVAL`
 
@@ -103,6 +114,7 @@ services:
       - DOCKER_SOCK=/var/run/docker.sock
       - AUTO_FILE=/data/auto-update.json
       # - DOCKER_REGISTRY_AUTH=username:password
+      # - DOCKER_REGISTRY_AUTH={"ghcr.io":"user:token","https://index.docker.io/v1/":"user:token"}
 ```
 
 ## Volume Mounts
@@ -132,5 +144,6 @@ Recommended so auto-update preferences survive container recreation and host res
 
 - Public images typically need no extra config until anonymous pull limits are hit.
 - Set `DOCKER_REGISTRY_AUTH` when Docker Hub or another registry rate-limits anonymous pulls.
-- Private registries depend on Docker daemon auth state.
+- Use shorthand `username:password` only for Docker Hub; use JSON map when more than one registry needs credentials.
+- Private registries can use either Docker daemon auth state or explicit `DOCKER_REGISTRY_AUTH` entries.
 - If host can already `docker pull` private image successfully, Image Watch usually inherits that access because pull happens through Docker Engine.

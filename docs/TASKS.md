@@ -30,6 +30,20 @@ No active tasks currently recorded.
 
 ## Completed tasks
 
+### TASK-006 — Multi-registry auth, persistent error display, docs
+
+Status: COMPLETED
+
+Goal:
+Extend authenticated pull support to multiple registries, persist last pull errors in the UI, and update matching documentation.
+
+Outcome:
+- `docker.go` supports `DOCKER_REGISTRY_AUTH` as either Docker Hub shorthand `username:password` or a JSON registry-to-credentials map.
+- `main.go` persists last pull errors per container and exposes them through `GET /api/images`.
+- `web/index.html` renders persistent container pull errors in red under each update cell.
+- README and project docs now describe multi-registry auth formats, persistent pull errors, and updated troubleshooting guidance.
+- `go build ./...` and `go vet ./...` passed after implementation.
+
 ### TASK-005 — Add UI warning for Docker pull rate limit + Docker auth upgrade
 
 Status: COMPLETED

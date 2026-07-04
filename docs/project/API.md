@@ -19,7 +19,8 @@ Returned by `GET /api/images`.
       "container_name": "nginx",
       "local_digest": "sha256:1111111111",
       "status": "outdated",
-      "auto_update": true
+      "auto_update": true,
+      "error": "pull failed: 429 Too Many Requests"
     }
   ]
 }
@@ -41,6 +42,7 @@ Fields:
 - `local_digest`: shortened local digest or `unknown`
 - `status`: `uptodate`, `outdated`, or `unknown`
 - `auto_update`: persisted toggle state for this container
+- `error`: optional last pull error kept until a later successful pull clears it
 
 ### `PullProgress`
 
@@ -78,7 +80,8 @@ Success response:
         "container_name": "nginx",
         "local_digest": "sha256:1111111111",
         "status": "outdated",
-        "auto_update": false
+        "auto_update": false,
+        "error": "pull failed: 429 Too Many Requests"
       }
     ]
   }
