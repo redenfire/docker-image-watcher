@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -25,16 +26,16 @@ import (
 var webFS embed.FS
 
 var (
-	authUser   string
-	authPass   string
-	hmacKey    []byte
-	loginMu    sync.Mutex
-	failCount  = make(map[string]*failEntry)
+	authUser  string
+	authPass  string
+	hmacKey   []byte
+	loginMu   sync.Mutex
+	failCount = make(map[string]*failEntry)
 )
 
 type failEntry struct {
-	count       int
-	last        time.Time
+	count        int
+	last         time.Time
 	blockedUntil time.Time
 }
 
@@ -277,7 +278,7 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 	})
 
-var handler http.Handler = mux
+	var handler http.Handler = mux
 	if authUser != "" && authPass != "" {
 		handler = authMiddleware(mux)
 	}
@@ -561,6 +562,9 @@ func (app *App) checkAll() {
 	for result := range resultsCh {
 		results = append(results, result)
 	}
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Image < results[j].Image
+	})
 
 	app.mu.Lock()
 	app.images = results
