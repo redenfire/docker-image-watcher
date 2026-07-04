@@ -206,14 +206,15 @@ type ImageGroup struct {
 }
 
 type App struct {
-	mu        sync.RWMutex
-	images    []ImageGroup
-	autoFile  string
-	autoSaved map[string]bool
-	cooldowns map[string]time.Time
-	progress  sync.Map
-	updating  sync.Map
-	selfCID   string
+	mu          sync.RWMutex
+	images      []ImageGroup
+	autoFile    string
+	autoSaved   map[string]bool
+	cooldowns   map[string]time.Time
+	rateLimited bool
+	progress    sync.Map
+	updating    sync.Map
+	selfCID     string
 }
 
 func main() {
@@ -275,6 +276,7 @@ func main() {
 	mux.HandleFunc("/api/images", app.handleImages)
 	mux.HandleFunc("/api/images/", app.handleImageAction)
 	mux.HandleFunc("/api/groups/", app.handleGroupAction)
+	mux.HandleFunc("/api/ratelimit", app.handleRateLimit)
 	mux.HandleFunc("/api/login", handleLogin)
 	mux.HandleFunc("/api/logout", handleLogout)
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -318,6 +320,18 @@ func (app *App) handleImages(w http.ResponseWriter, r *http.Request) {
 	defer app.mu.RUnlock()
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(app.images)
+}
+
+func (app *App) handleRateLimit(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", 405)
+		return
+	}
+	app.mu.RLock()
+	rateLimited := app.rateLimited
+	app.mu.RUnlock()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]bool{"rate_limited": rateLimited})
 }
 
 func (app *App) findContainer(cid string) *ContainerItem {
@@ -495,6 +509,8 @@ func (app *App) checkAll() {
 
 	sem := make(chan struct{}, maxWorkers)
 	resultsCh := make(chan ImageGroup, len(groups))
+	sawRateLimit := false
+	var rateLimitMu sync.Mutex
 	var wg sync.WaitGroup
 
 	for imageName, entries := range groups {
@@ -509,6 +525,10 @@ func (app *App) checkAll() {
 			remoteStr := "unknown"
 			if remoteErr == nil {
 				remoteStr = shortenDigest(remoteDigest)
+			} else if IsRateLimitError(remoteErr) {
+				rateLimitMu.Lock()
+				sawRateLimit = true
+				rateLimitMu.Unlock()
 			}
 
 			var containers []ContainerItem
@@ -526,7 +546,10 @@ func (app *App) checkAll() {
 				if localErr != nil {
 					item.LocalDigest = "unknown"
 					item.Status = "unknown"
-				} else if remoteErr != nil || localDigest != remoteDigest {
+				} else if remoteErr != nil {
+					item.LocalDigest = shortenDigest(localDigest)
+					item.Status = "unknown"
+				} else if localDigest != remoteDigest {
 					item.LocalDigest = shortenDigest(localDigest)
 					item.Status = "outdated"
 					gOutdated++
@@ -575,6 +598,7 @@ func (app *App) checkAll() {
 
 	app.mu.Lock()
 	app.images = results
+	app.rateLimited = sawRateLimit
 	app.mu.Unlock()
 
 	autoCooldown := getEnvDuration("AUTO_COOLDOWN", 5*time.Minute)
@@ -620,6 +644,11 @@ func (app *App) updateContainer(cid string) {
 	if err := pullImageStream(image, func(p PullProgress) {
 		app.progress.Store(cid, p)
 	}); err != nil {
+		if IsRateLimitError(err) {
+			app.mu.Lock()
+			app.rateLimited = true
+			app.mu.Unlock()
+		}
 		app.progress.Store(cid, PullProgress{Status: "error: " + err.Error()})
 		log.Printf("pull %s: %v", image, err)
 		return
