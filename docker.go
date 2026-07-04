@@ -24,8 +24,8 @@ type dockerContainer struct {
 }
 
 type dockerInspect struct {
-	ID         string `json:"Id"`
-	Name       string `json:"Name"`
+	ID         string          `json:"Id"`
+	Name       string          `json:"Name"`
 	Config     json.RawMessage `json:"Config"`
 	HostConfig json.RawMessage `json:"HostConfig"`
 }
@@ -79,11 +79,11 @@ func inspectContainer(id string) (*dockerInspect, error) {
 }
 
 type PullProgress struct {
-	Layer     string `json:"layer"`
-	Current   int64  `json:"current"`
-	Total     int64  `json:"total"`
-	Percent   int    `json:"percent"`
-	Status    string `json:"status"`
+	Layer   string `json:"layer"`
+	Current int64  `json:"current"`
+	Total   int64  `json:"total"`
+	Percent int    `json:"percent"`
+	Status  string `json:"status"`
 }
 
 func pullImageStream(image string, progressFn func(PullProgress)) error {
@@ -208,24 +208,24 @@ func recreateContainer(id, image string) error {
 	delete(createBody, "Hostname")
 
 	type hostCfg struct {
-		Binds           []string             `json:"Binds"`
-		PortBindings    map[string]interface{} `json:"PortBindings"`
-		RestartPolicy   map[string]interface{} `json:"RestartPolicy"`
-		NetworkMode     string               `json:"NetworkMode"`
-		Privileged      bool                 `json:"Privileged"`
-		ExtraHosts      []string             `json:"ExtraHosts"`
-		DNS             []string             `json:"Dns"`
-		CapAdd          []string             `json:"CapAdd"`
-		CapDrop         []string             `json:"CapDrop"`
-		Devices         []interface{}        `json:"Devices"`
-		ShmSize         int64                `json:"ShmSize"`
-		Sysctls         map[string]string    `json:"Sysctls"`
-		Runtime         string               `json:"Runtime"`
-		GroupAdd        []string             `json:"GroupAdd"`
-		IpcMode         string               `json:"IpcMode"`
-		PidMode         string               `json:"PidMode"`
-		UsernsMode      string               `json:"UsernsMode"`
-		UTSMode         string               `json:"UTSMode"`
+		Binds         []string               `json:"Binds"`
+		PortBindings  map[string]interface{} `json:"PortBindings"`
+		RestartPolicy map[string]interface{} `json:"RestartPolicy"`
+		NetworkMode   string                 `json:"NetworkMode"`
+		Privileged    bool                   `json:"Privileged"`
+		ExtraHosts    []string               `json:"ExtraHosts"`
+		DNS           []string               `json:"Dns"`
+		CapAdd        []string               `json:"CapAdd"`
+		CapDrop       []string               `json:"CapDrop"`
+		Devices       []interface{}          `json:"Devices"`
+		ShmSize       int64                  `json:"ShmSize"`
+		Sysctls       map[string]string      `json:"Sysctls"`
+		Runtime       string                 `json:"Runtime"`
+		GroupAdd      []string               `json:"GroupAdd"`
+		IpcMode       string                 `json:"IpcMode"`
+		PidMode       string                 `json:"PidMode"`
+		UsernsMode    string                 `json:"UsernsMode"`
+		UTSMode       string                 `json:"UTSMode"`
 	}
 
 	var hc hostCfg
