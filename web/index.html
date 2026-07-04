@@ -119,7 +119,7 @@ const i18n = {
     logout: 'Logout',
     dismiss: 'Dismiss',
     rateLimitTitle: 'Docker pull rate limit detected',
-    rateLimitBody: 'Anonymous registry pulls are being throttled. Set DOCKER_REGISTRY_AUTH=username:password, then wait for next successful check or pull.',
+    rateLimitBody: 'Anonymous registry pulls are being throttled. Configure DOCKER_REGISTRY_AUTH with Docker Hub shorthand or JSON per-registry credentials, then wait for next successful check or pull.',
   },
   it: {
     title: 'Docker Image Watcher',
@@ -152,7 +152,7 @@ const i18n = {
     logout: 'Esci',
     dismiss: 'Chiudi',
     rateLimitTitle: 'Limite di pull Docker rilevato',
-    rateLimitBody: 'I pull anonimi dal registry sono limitati. Imposta DOCKER_REGISTRY_AUTH=username:password, poi attendi il prossimo controllo o pull riuscito.',
+    rateLimitBody: 'I pull anonimi dal registry sono limitati. Configura DOCKER_REGISTRY_AUTH con formato Docker Hub o JSON per-registry, poi attendi il prossimo controllo o pull riuscito.',
   }
 };
 
@@ -244,7 +244,7 @@ function render(groups) {
           <td class="digest">${esc(c.local_digest)}</td>
           <td></td>
           <td><div class="toggle ${c.auto_update ? 'on' : ''}" data-cid="${esc(c.container_id)}" onclick="toggle(this)"></div></td>
-          <td><div class="progress-cell" id="progress-${esc(c.container_id)}">${isUpdating ? '<div class="progress-bar"><div class="bar"><div class="fill" style="width:0%"></div></div><span class="pct">0%</span></div>' : `<button class="btn btn-update" data-cid="${esc(c.container_id)}" onclick="doUpdate(this)" ${c.status !== 'outdated' ? 'disabled' : ''}>${esc(t.update)}</button>`}</div></td>
+          <td><div class="progress-cell" id="progress-${esc(c.container_id)}">${isUpdating ? '<div class="progress-bar"><div class="bar"><div class="fill" style="width:0%"></div></div><span class="pct">0%</span></div>' : `<button class="btn btn-update" data-cid="${esc(c.container_id)}" onclick="doUpdate(this)" ${c.status !== 'outdated' ? 'disabled' : ''}>${esc(t.update)}</button>`}</div>${c.error ? `<div style="color:#ef4444;font-size:.7rem;margin-top:4px;word-break:break-all">${esc(c.error)}</div>` : ''}</td>
         </tr>`;
       }
     }
@@ -314,7 +314,7 @@ async function pollProgress(cid) {
     const res = await fetch(`/api/images/${cid}/progress`);
     if (!res.ok) { updating.delete(cid); load(); return; }
     const p = await res.json();
-    if (p.status === 'error' || p.status === 'recreating') {
+    if (p.status === 'recreating' || p.status.startsWith('error')) {
       const statusLabel = p.status === 'recreating' ? t.recreating : (p.status.startsWith('error') ? p.status.replace('error: ', t.errorLabel + ': ') : p.status);
       cell.innerHTML = `<div class="progress-bar"><div class="bar"><div class="fill" style="width:${p.percent}%"></div></div><span class="pct">${p.percent}%</span> <span style="color:#94a3b8;font-size:.7rem">${esc(statusLabel)}</span></div>`;
       if (p.status === 'recreating') {
