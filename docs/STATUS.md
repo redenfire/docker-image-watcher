@@ -20,7 +20,7 @@ Current phase: Maintenance
 
 ## Current objective
 
-Keep private Forgejo `main` synced to latest upstream application state while preserving local agentic tooling scaffold and preparing next project-specific maintenance or feature work.
+Keep private Forgejo `main` synced to latest upstream application state while preserving local agentic tooling scaffold and shipping small operator-focused improvements when needed.
 
 ## Working state
 
@@ -32,13 +32,15 @@ Keep private Forgejo `main` synced to latest upstream application state while pr
 - GitNexus index was refreshed for current repository state.
 - Shared `agent-bridge` MCP broker scaffolding and docs exist for structured OpenCode <-> Caveman handoff.
 - Obsolete upstream PR branches were pruned after their fixes landed upstream.
-- Current upstream app state includes grouped image views, auth/login flow, i18n updates, and latest docs refresh.
+- Current upstream app state includes grouped image views, auth/login flow, i18n updates, latest docs refresh, and Docker pull rate-limit warning support.
 - OpenCode MCP verification succeeded for both `gitnexus` and `agent_bridge`.
 - Caveman session verification is considered successful; TASK-003 is complete.
 - 12 upstream PR branches were created and pushed for TIER 1/2/3 fixes, plus 2 Forgejo-only maintenance commits.
 - All Go fixes are merged into Forgejo `main` and the build succeeds.
 - Application code audit found zero `FIXME`/`TODO`/`HACK` markers in runtime source files.
 - Forgejo build succeeded on cleaned branch state.
+- Docker pull path supports optional authenticated registry pulls via `DOCKER_REGISTRY_AUTH`.
+- Web UI surfaces current Docker pull rate-limit state through a dismissible warning banner.
 
 ### What does not work yet
 
@@ -71,8 +73,8 @@ Keep private Forgejo `main` synced to latest upstream application state while pr
 ## Last meaningful update
 
 - Date: 2026-07-04
-- Summary: Completed all TIER 1/2/3 fixes, sent 12 upstream PR branches plus 2 Forgejo-only maintenance commits, and documented scratch-image health check guidance.
+- Summary: Added Docker pull rate-limit detection, authenticated pull support via `DOCKER_REGISTRY_AUTH`, a UI warning banner, and matching project documentation updates.
 
 ## Next action
 
-All identified fixes sent upstream. Project is in maintenance phase. Next work can be a new feature or upstream contribution.
+TASK-005 is complete. Project remains in maintenance phase until next feature request or upstream contribution.

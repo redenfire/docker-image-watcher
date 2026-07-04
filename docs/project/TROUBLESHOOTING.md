@@ -4,7 +4,8 @@
 |---|---|---|
 | All images show `unknown` status | Docker socket not mounted, wrong socket path, or insufficient permissions | Check `/var/run/docker.sock` mount and `DOCKER_SOCK` value |
 | Some images show `unknown` | Registry unreachable, registry auth required, or digest lookup failed | Check network connectivity and verify host can pull image |
-| Pull fails / `pull error` | Docker Hub rate limit, private registry auth issue, or Docker daemon error | Run `docker pull` on host first to verify auth and wait for rate-limit reset if needed |
+| Pull fails / `pull error` | Docker Hub rate limit, private registry auth issue, or Docker daemon error | Set `DOCKER_REGISTRY_AUTH=username:password` when needed, run `docker pull` on host to verify auth, and wait for rate-limit reset if still anonymous |
+| Rate-limit banner is visible | Recent check or pull hit anonymous registry throttling | Configure `DOCKER_REGISTRY_AUTH`, then wait for the next successful check or pull to clear the banner |
 | Update button disabled | Container is already `uptodate` or status is `unknown` | Only `outdated` containers can be updated from UI |
 | Auto-update not triggering | Cooldown active, container not outdated, or toggle not persisted | Wait 5 minutes, confirm status is `outdated`, verify `/data` persistence |
 | Progress bar stuck at `0%` | Large image still downloading or daemon not yet reporting layer totals | Wait longer and inspect Docker daemon activity |
@@ -40,6 +41,12 @@ docker inspect image-watch --format '{{json .Mounts}}'
 
 ```bash
 docker pull nginx:latest
+```
+
+### Retry with authenticated pull config
+
+```bash
+DOCKER_REGISTRY_AUTH=username:password docker compose up -d
 ```
 
 ## Common Causes of `unknown`

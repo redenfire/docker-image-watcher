@@ -147,6 +147,22 @@ When no update is active yet, endpoint returns `404` with `no progress` body.
 curl http://localhost:8099/api/images/3d4c5b6a7f8e/progress
 ```
 
+### `GET /api/ratelimit`
+
+Return whether the backend has detected Docker pull rate limiting during recent checks or pull attempts.
+
+Success response:
+
+```json
+{"rate_limited": true}
+```
+
+`curl` example:
+
+```bash
+curl http://localhost:8099/api/ratelimit
+```
+
 ### `POST /api/groups/update`
 
 Trigger async pull and recreate for all containers of an image group.
@@ -234,5 +250,6 @@ Common errors emitted by handlers:
 ## Notes
 
 - `GET /api/images` only includes running containers because Docker API call uses `all=false`.
+- `GET /api/ratelimit` remains `true` until a later check cycle completes without detecting rate limiting.
 - Containers started from image IDs like `sha256:...` are skipped.
 - Digests in API are shortened to first 17 characters for display.

@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -86,10 +87,54 @@ type PullProgress struct {
 	Status  string `json:"status"`
 }
 
+func IsRateLimitError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "429") ||
+		strings.Contains(msg, "toomanyrequests") ||
+		strings.Contains(msg, "pull rate limit") ||
+		strings.Contains(msg, "too many requests")
+}
+
 func pullImageStream(image string, progressFn func(PullProgress)) error {
 	v := url.Values{}
 	v.Set("fromImage", image)
-	resp, err := dockerAPI("POST", "/images/create?"+v.Encode(), nil)
+	client := dockerClient()
+	req, err := http.NewRequest("POST", "http://localhost/images/create?"+v.Encode(), nil)
+	if err != nil {
+		return fmt.Errorf("pull request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	auth := strings.TrimSpace(os.Getenv("DOCKER_REGISTRY_AUTH"))
+	if auth != "" {
+		username, password, ok := strings.Cut(auth, ":")
+		if !ok || username == "" || password == "" {
+			return fmt.Errorf("registry auth: invalid DOCKER_REGISTRY_AUTH, expected username:password")
+		}
+		serverAddress := ""
+		if registry, _, _, ok := parseImage(image); ok {
+			serverAddress = registry
+			if serverAddress == "registry-1.docker.io" {
+				serverAddress = "https://index.docker.io/v1/"
+			}
+		}
+		payload, err := json.Marshal(struct {
+			Username      string `json:"username"`
+			Password      string `json:"password"`
+			ServerAddress string `json:"serveraddress,omitempty"`
+		}{
+			Username:      username,
+			Password:      password,
+			ServerAddress: serverAddress,
+		})
+		if err != nil {
+			return fmt.Errorf("registry auth: %w", err)
+		}
+		req.Header.Set("X-Registry-Auth", base64.URLEncoding.EncodeToString(payload))
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("pull request: %w", err)
 	}

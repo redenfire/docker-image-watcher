@@ -7,6 +7,7 @@
 | `PORT` | `8080` | HTTP listen port for web UI and API |
 | `DOCKER_SOCK` | `/var/run/docker.sock` | Unix socket path used for Docker Engine API |
 | `AUTO_FILE` | `/data/auto-update.json` | JSON file storing per-container auto-update state |
+| `DOCKER_REGISTRY_AUTH` | unset | Optional registry credentials for authenticated Docker Engine pulls; format `username:password` |
 | `CHECK_INTERVAL` | `10m` | Interval for background digest check loop |
 | `CHECK_CONCURRENCY` | `5` | Max concurrent registry requests during check |
 | `AUTO_COOLDOWN` | `5m` | Cooldown window between auto-updates for same container |
@@ -17,6 +18,14 @@
 - When both set, enables HMAC-signed session auth with login page
 - Unauthenticated requests to API return 401
 - Login brute-force rate-limited: 5 failures/min → 30s block
+
+### `DOCKER_REGISTRY_AUTH`
+
+- Read in `docker.go`
+- Optional
+- Format: `username:password`
+- Sent to Docker Engine as `X-Registry-Auth` during image pull requests
+- Useful for Docker Hub or private registries that throttle or deny anonymous pulls
 
 ### `CHECK_INTERVAL`
 
@@ -93,6 +102,7 @@ services:
       - PORT=8080
       - DOCKER_SOCK=/var/run/docker.sock
       - AUTO_FILE=/data/auto-update.json
+      # - DOCKER_REGISTRY_AUTH=username:password
 ```
 
 ## Volume Mounts
@@ -120,6 +130,7 @@ Recommended so auto-update preferences survive container recreation and host res
 
 ## Registry Access Tips
 
-- Public images typically need no extra config.
+- Public images typically need no extra config until anonymous pull limits are hit.
+- Set `DOCKER_REGISTRY_AUTH` when Docker Hub or another registry rate-limits anonymous pulls.
 - Private registries depend on Docker daemon auth state.
 - If host can already `docker pull` private image successfully, Image Watch usually inherits that access because pull happens through Docker Engine.

@@ -158,3 +158,20 @@ Files/components affected:
 
 - `main.go: shutdown signal handling`
 - `memory/LEARNINGS.md`
+
+### 2026-07-04 - Registry digest failures must not be treated as update availability
+
+What was learned:
+
+When remote digest lookup fails because of Docker Hub rate limiting or similar registry errors, marking containers as `outdated` is misleading and can trigger unnecessary auto-update attempts. Those cases should surface as `unknown` until a later successful registry check resolves the remote digest.
+
+Why it matters:
+
+The UI and auto-update loop should only offer updates when the application has a confirmed remote digest mismatch, not when registry access is degraded.
+
+Files/components affected:
+
+- `main.go: checkAll`
+- `docker.go: pullImageStream, IsRateLimitError`
+- `web/index.html`
+- `memory/LEARNINGS.md`

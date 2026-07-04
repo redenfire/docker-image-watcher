@@ -53,10 +53,22 @@ td { font-size: .875rem; font-family: "SFMono-Regular",Consolas,"Liberation Mono
 .empty p { margin-top: 8px; font-size: .85rem; }
 .name-cell { max-width: 300px; overflow: hidden; text-overflow: ellipsis; }
 .container-name { color: #94a3b8; }
+.warning-banner { margin: 0 0 16px; padding: 14px 16px; border-radius: 8px; background: #7c2d12; color: #ffedd5; border: 1px solid #ea580c; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.warning-banner strong { display: block; margin-bottom: 4px; }
+.warning-banner p { margin: 0; color: #fed7aa; font-size: .85rem; }
+.btn-dismiss { background: transparent; color: #ffedd5; border: 1px solid #fdba74; }
+.btn-dismiss:hover { background: rgba(255,255,255,.08); }
 </style>
 </head>
 <body>
 <h1>🐳 <span id="appTitle">Docker Image Watcher</span> <small id="status"></small> <span style="margin-left:auto;display:flex;align-items:center;gap:8px"><a href="#" id="langSwitch" style="color:#64748b;text-decoration:none;font-size:.75rem" onclick="switchLang();return false">IT</a><a href="#" id="logoutLink" style="color:#ef4444;text-decoration:none;font-size:.75rem" onclick="doLogout();return false">Logout</a><label style="font-size:.8rem;font-weight:400;display:flex;align-items:center;gap:6px;cursor:pointer"><span id="hideLabel">Hide up to date</span> <div class="toggle on" id="hideToggle"></div></label></span></h1>
+<div class="warning-banner" id="rateLimitBanner" hidden>
+  <div>
+    <strong id="rateLimitTitle"></strong>
+    <p id="rateLimitBody"></p>
+  </div>
+  <button type="button" class="btn btn-dismiss" id="rateLimitDismiss" onclick="dismissRateLimit()">Dismiss</button>
+</div>
 <table><thead><tr>
 <th id="thImage">Image / Container</th><th id="thDigest">Digest</th><th id="thStatus">Status</th><th id="thAuto">Auto</th><th></th>
 </tr></thead><tbody id="rows"></tbody></table>
@@ -69,6 +81,8 @@ td { font-size: .875rem; font-family: "SFMono-Regular",Consolas,"Liberation Mono
 const POLL = 10000;
 let updating = new Set();
 let showAll = false;
+let rateLimited = false;
+let rateLimitDismissed = false;
 
 let lang = (navigator.language || 'en').startsWith('it') ? 'it' : 'en';
 document.getElementById('langSwitch').textContent = lang === 'en' ? 'IT' : 'EN';
@@ -103,6 +117,9 @@ const i18n = {
     recreating: 'recreating',
     noProgress: 'no progress',
     logout: 'Logout',
+    dismiss: 'Dismiss',
+    rateLimitTitle: 'Docker pull rate limit detected',
+    rateLimitBody: 'Anonymous registry pulls are being throttled. Set DOCKER_REGISTRY_AUTH=username:password, then wait for next successful check or pull.',
   },
   it: {
     title: 'Docker Image Watcher',
@@ -133,6 +150,9 @@ const i18n = {
     recreating: 'ricreazione',
     noProgress: 'nessun progresso',
     logout: 'Esci',
+    dismiss: 'Chiudi',
+    rateLimitTitle: 'Limite di pull Docker rilevato',
+    rateLimitBody: 'I pull anonimi dal registry sono limitati. Imposta DOCKER_REGISTRY_AUTH=username:password, poi attendi il prossimo controllo o pull riuscito.',
   }
 };
 
@@ -153,6 +173,29 @@ function applyL10N() {
   document.getElementById('thStatus').textContent = t.status;
   document.getElementById('thAuto').textContent = t.auto;
   document.getElementById('logoutLink').textContent = t.logout;
+  document.getElementById('rateLimitTitle').textContent = t.rateLimitTitle;
+  document.getElementById('rateLimitBody').textContent = t.rateLimitBody;
+  document.getElementById('rateLimitDismiss').textContent = t.dismiss;
+  renderRateLimit();
+}
+
+function renderRateLimit() {
+  document.getElementById('rateLimitBanner').hidden = !rateLimited || rateLimitDismissed;
+}
+
+async function checkRateLimit() {
+  try {
+    const res = await fetch('/api/ratelimit');
+    const data = await res.json();
+    rateLimited = !!data.rate_limited;
+    if (!rateLimited) rateLimitDismissed = false;
+    renderRateLimit();
+  } catch(_) {}
+}
+
+function dismissRateLimit() {
+  rateLimitDismissed = true;
+  renderRateLimit();
 }
 
 async function load() {
@@ -305,7 +348,11 @@ function esc(s) {
 
 applyL10N();
 load();
-setInterval(load, POLL);
+checkRateLimit();
+setInterval(() => {
+  load();
+  checkRateLimit();
+}, POLL);
 
 fetch('/api/auth/status').then(r => r.json()).then(d => {
   if (!d.enabled) document.getElementById('logoutLink').style.display = 'none';

@@ -30,6 +30,20 @@ No active tasks currently recorded.
 
 ## Completed tasks
 
+### TASK-005 — Add UI warning for Docker pull rate limit + Docker auth upgrade
+
+Status: COMPLETED
+
+Goal:
+Add a persistent UI warning when Docker pull rate limiting is detected and support authenticated Docker Engine pulls through environment configuration.
+
+Outcome:
+- `docker.go` detects Docker pull rate-limit errors and supports `DOCKER_REGISTRY_AUTH=username:password` for `X-Registry-Auth` pull requests.
+- `main.go` tracks current rate-limit state and exposes `GET /api/ratelimit` for the web UI.
+- `web/index.html` shows a dismissible warning banner with English and Italian copy when the backend reports rate limiting.
+- Project docs were updated for configuration, API, troubleshooting, and current status.
+- `go build ./...` and `go vet ./...` passed after implementation.
+
 ### TASK-004 — Apply all TIER 1/2/3 fixes as upstream PRs
 
 Status: COMPLETED
