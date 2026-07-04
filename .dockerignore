@@ -1,0 +1,10 @@
+.git
+.gitignore
+.gitnexus
+.gitattributes
+*.md
+*.exe
+tmp/
+node_modules/
+Dockerfile
+docker-compose.yml
