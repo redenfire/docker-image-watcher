@@ -30,6 +30,25 @@ No active tasks currently recorded.
 
 ## Completed tasks
 
+### TASK-004 — Apply all TIER 1/2/3 fixes as upstream PRs
+
+Status: COMPLETED
+
+Goal:
+Identify and fix all code quality issues across Go source files, Dockerfile, and CI workflow. Send each logical fix as a separate upstream PR branch cut from `upstream/main`.
+
+Outcome:
+- 12 upstream PR branches created and pushed to `gh-fork`:
+  - TIER 1 (4): getImageDigest loop, recreateContainer errors, unmarshal errors, saveAuto errors
+  - TIER 2 (4): go fmt, `.dockerignore`, Dockerfile COPY glob, Names index guard
+  - TIER 3 (4): io.ReadAll errors, syscall deprecation, fs.Sub error, sort results
+- 2 Forgejo-only maintenance commits added on `main`:
+  - README multi-arch claim
+  - CI cache-from
+- All PR branches merged into `main` for Forgejo build
+- All builds and vets passed on each branch and on merged `main`
+- Forgejo image build succeeded
+
 ### TASK-003 — Verify live OpenCode/Caveman tooling sessions on cleaned main
 
 Status: COMPLETED

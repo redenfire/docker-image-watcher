@@ -145,6 +145,14 @@ When exposing Image Watch on a network, set `AUTH_USER` and `AUTH_PASS` to enabl
 
 Mitigations and deployment guidance: [`docs/project/SECURITY.md`](docs/project/SECURITY.md)
 
+## Health Checks
+
+The application exposes a `GET /health` endpoint that returns HTTP 200. Since the image is based on `scratch` for minimal size, Docker `HEALTHCHECK` is not built into the image.
+
+**Portainer stacks:** Configure an external HTTP health check pointing to `http://<container-name>:8080/health` in the Portainer UI, or use Portainer's HTTP ping capability to monitor the container from outside.
+
+**Other orchestrators:** Any standard HTTP health probe targeting `http://<container-ip>:8080/health` works.
+
 ## Troubleshooting
 
 - Images showing `unknown` status: check Docker socket access and registry connectivity

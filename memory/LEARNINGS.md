@@ -145,3 +145,16 @@ Files/components affected:
 - `docs/CONTRIBUTING.md`
 - `memory/CONSTRAINTS.md`
 - `memory/LEARNINGS.md`
+
+### 2026-07-04 - os.Kill cannot be trapped; replacing SIGTERM with it breaks graceful shutdown
+
+What was learned:
+
+When replacing deprecated signal constants, `os.Kill` is not a valid replacement for `syscall.SIGTERM`. `os.Kill` maps to `SIGKILL`, which the process cannot trap, intercept, or handle. Using it in `signal.Notify` would terminate the application immediately without running graceful shutdown logic.
+
+The correct approach is to keep `syscall.SIGTERM` and replace only `SIGINT` with `os.Interrupt`.
+
+Files/components affected:
+
+- `main.go: shutdown signal handling`
+- `memory/LEARNINGS.md`

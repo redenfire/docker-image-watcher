@@ -35,6 +35,9 @@ Keep private Forgejo `main` synced to latest upstream application state while pr
 - Current upstream app state includes grouped image views, auth/login flow, i18n updates, and latest docs refresh.
 - OpenCode MCP verification succeeded for both `gitnexus` and `agent_bridge`.
 - Caveman session verification is considered successful; TASK-003 is complete.
+- 12 upstream PR branches were created and pushed for TIER 1/2/3 fixes, plus 2 Forgejo-only maintenance commits.
+- All Go fixes are merged into Forgejo `main` and the build succeeds.
+- Application code audit found zero `FIXME`/`TODO`/`HACK` markers in runtime source files.
 - Forgejo build succeeded on cleaned branch state.
 
 ### What does not work yet
@@ -67,9 +70,9 @@ Keep private Forgejo `main` synced to latest upstream application state while pr
 
 ## Last meaningful update
 
-- Date: 2026-07-03
-- Summary: Completed TASK-003 by verifying OpenCode and Caveman tooling on cleaned `main`, confirming MCP/broker setup works, and confirming Forgejo build success.
+- Date: 2026-07-04
+- Summary: Completed all TIER 1/2/3 fixes, sent 12 upstream PR branches plus 2 Forgejo-only maintenance commits, and documented scratch-image health check guidance.
 
 ## Next action
 
-Choose next project-specific maintenance or feature task on top of cleaned upstream-synced `main`.
+All identified fixes sent upstream. Project is in maintenance phase. Next work can be a new feature or upstream contribution.

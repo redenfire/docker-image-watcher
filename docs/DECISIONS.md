@@ -73,3 +73,22 @@ Consequences:
 - Private workflow files can evolve on `main` without polluting upstream contribution branches.
 - Every new upstream PR must be cut or re-cut from latest `upstream/main` and contain only upstreamable changes.
 - Stale `pr/*` branches should be deleted after upstream merges or superseding rebases instead of being reused blindly.
+
+### DECISION-004 — Scratch-based image uses external health checks, not Docker HEALTHCHECK
+
+Date: 2026-07-04
+
+Status: accepted
+
+Context:
+The application Dockerfile uses scratch as the final stage for a minimal attack surface (~15MB). Scratch has no shell, wget, curl, or any binary beyond `/image-watch` itself. Docker HEALTHCHECK runs inside the container, so it cannot execute any command. The app already exposes a `/health` endpoint returning HTTP 200.
+
+Decision:
+Do not add Docker HEALTHCHECK to the image. Instead, configure health monitoring externally:
+- Portainer: external HTTP ping to `http://<container>:8080/health`
+- Other orchestrators: any TCP/HTTP health probe can target the same endpoint
+
+Consequences:
+- Image stays lean with no extra dependencies.
+- Health monitoring works regardless of container runtime capabilities.
+- Operators must configure health checks at the orchestrator level, not rely on Docker's built-in HEALTHCHECK.
