@@ -204,6 +204,10 @@ async function load() {
   bar.parentElement.classList.add('checking');
   try {
     const res = await fetch('/api/images');
+    if (res.status === 401) {
+      window.location.href = '/login.html';
+      return;
+    }
     const groups = await res.json();
     render(groups);
     bar.textContent = t.images(groups.length);

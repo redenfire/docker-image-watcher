@@ -12,6 +12,7 @@ import (
 	"errors"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -68,11 +69,12 @@ func verifySession(token string) bool {
 	if len(sig) != len(expected) || subtle.ConstantTimeCompare(sig, expected) != 1 {
 		return false
 	}
-	parts2 := strings.SplitN(string(payload), "@", 2)
-	if len(parts2) != 2 {
+	payloadStr := string(payload)
+	atIdx := strings.LastIndex(payloadStr, "@")
+	if atIdx < 0 {
 		return false
 	}
-	expiry, err := strconv.ParseInt(parts2[1], 10, 64)
+	expiry, err := strconv.ParseInt(payloadStr[atIdx+1:], 10, 64)
 	if err != nil || time.Now().Unix() > expiry {
 		return false
 	}
@@ -109,6 +111,9 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ip := r.RemoteAddr
+	if host, _, err := net.SplitHostPort(ip); err == nil {
+		ip = host
+	}
 	loginMu.Lock()
 	fe := failCount[ip]
 	now := time.Now()
