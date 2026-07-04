@@ -16,11 +16,11 @@ Choose one:
 - Production
 - Maintenance
 
-Current phase: Maintenance
+Current phase: Implementation
 
 ## Current objective
 
-Keep private Forgejo `main` synced to latest upstream application state while preserving local agentic tooling scaffold and shipping small operator-focused auth and error-visibility improvements when needed.
+Complete TASK-007 auth fixes for email-style usernames, effective login throttling, and expired-session redirect behavior while keeping private Forgejo `main` close to upstream application state.
 
 ## Working state
 
@@ -42,6 +42,7 @@ Keep private Forgejo `main` synced to latest upstream application state while pr
 - Docker pull path supports optional authenticated registry pulls via `DOCKER_REGISTRY_AUTH`, including Docker Hub shorthand and JSON multi-registry credentials.
 - Web UI surfaces current Docker pull rate-limit state through a dismissible warning banner.
 - Last pull error for a container persists in UI until a later successful pull clears it.
+- TASK-007 implementation is in progress for auth/session correctness issues discovered during review.
 
 ### What does not work yet
 
@@ -74,8 +75,8 @@ Keep private Forgejo `main` synced to latest upstream application state while pr
 ## Last meaningful update
 
 - Date: 2026-07-04
-- Summary: Added multi-registry pull auth support, persistent per-container pull error display, and matching documentation updates.
+- Summary: Started TASK-007 auth/session fixes covering `@` usernames, login throttle host normalization, and expired-session redirect behavior.
 
 ## Next action
 
-TASK-006 is complete. Project remains in maintenance phase until next feature request or upstream contribution.
+Finish validating TASK-007 auth fixes with live login/session checks, then decide whether to upstream the app-side changes.

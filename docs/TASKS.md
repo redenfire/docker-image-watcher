@@ -26,7 +26,29 @@ Each task should include:
 
 ## Active tasks
 
-No active tasks currently recorded.
+### TASK-007 — Fix auth bugs for email-style usernames, login throttling, and expired-session redirect
+
+Status: IN PROGRESS
+
+Goal:
+Fix three auth issues: email-style usernames containing `@`, ineffective login throttling caused by `RemoteAddr` port variance, and expired sessions that leave the UI on a broken page instead of redirecting to login.
+
+Files likely involved:
+- `main.go`
+- `web/index.html`
+- `docs/TASKS.md`
+- `docs/STATUS.md`
+
+Checks to run:
+- `go build ./...`
+- `go vet ./...`
+- manual login with `AUTH_USER=user@domain.com`
+- verify repeated failed logins trigger temporary block
+- verify expired session redirects to `/login.html`
+
+Notes / risks:
+- Browser-side expired-session behavior still needs live verification after implementation.
+- Login throttle remains process-local in-memory state.
 
 ## Completed tasks
 
