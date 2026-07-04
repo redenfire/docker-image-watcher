@@ -652,11 +652,20 @@ func (app *App) loadAuto() {
 }
 
 func saveAuto(auto map[string]bool, p string) {
-	data, _ := json.Marshal(auto)
-	if i := strings.LastIndex(p, "/"); i > 0 {
-		os.MkdirAll(p[:i], 0700)
+	data, err := json.Marshal(auto)
+	if err != nil {
+		log.Printf("save auto: marshal: %v", err)
+		return
 	}
-	os.WriteFile(p, data, 0600)
+	if i := strings.LastIndex(p, "/"); i > 0 {
+		if err := os.MkdirAll(p[:i], 0700); err != nil {
+			log.Printf("save auto: mkdir: %v", err)
+			return
+		}
+	}
+	if err := os.WriteFile(p, data, 0600); err != nil {
+		log.Printf("save auto: write: %v", err)
+	}
 }
 
 func shortenDigest(d string) string {
