@@ -64,6 +64,7 @@ func fetchManifest(url, token string) (digest string, code int, headers http.Hea
 		return "", 0, nil, err
 	}
 	defer resp.Body.Close()
+	// drain body for connection reuse (best-effort)
 	io.Copy(io.Discard, resp.Body)
 	return resp.Header.Get("Docker-Content-Digest"), resp.StatusCode, resp.Header, nil
 }
