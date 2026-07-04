@@ -53,7 +53,7 @@ func dockerAPI(method, path string, body io.Reader) (*http.Response, error) {
 }
 
 func listContainers() ([]dockerContainer, error) {
-	resp, err := dockerAPI("GET", "/containers/json?all=false", nil)
+	resp, err := dockerAPI("GET", "/containers/json?all=false&digests=1", nil)
 	if err != nil {
 		return nil, fmt.Errorf("list containers: %w", err)
 	}
