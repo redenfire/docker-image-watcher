@@ -26,6 +26,27 @@ Each task should include:
 
 ## Active tasks
 
+### TASK-008 — UI improvements for rate-limit banner, update buttons, and status badges
+
+Status: IN PROGRESS
+
+Goal:
+Improve the web UI by fixing rate-limit banner dismissal, reducing redundant per-group update actions, adding a global update button, and improving status badge readability.
+
+Files likely involved:
+- `web/index.html`
+- `docs/TASKS.md`
+- `docs/STATUS.md`
+
+Checks to run:
+- visual banner-dismiss verification
+- verify single-container groups hide redundant group update button
+- verify global update button appears only when outdated containers exist
+- verify larger status badges and updated Italian label render correctly
+
+Notes / risks:
+- Global update action runs sequential group updates from the browser and still needs live UI verification.
+
 ### TASK-007 — Fix auth bugs for email-style usernames, login throttling, and expired-session redirect
 
 Status: IN PROGRESS

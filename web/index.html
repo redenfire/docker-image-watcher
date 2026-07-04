@@ -18,7 +18,7 @@ td { font-size: .875rem; font-family: "SFMono-Regular",Consolas,"Liberation Mono
 .group-row + .child-row td { padding-top: 2px; }
 .child-row td:first-child { padding-left: 28px; }
 .child-row:last-child td { border-bottom: 1px solid #334155; }
-.badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: .75rem; font-weight: 600; }
+.badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 12px; border-radius: 999px; font-size: .85rem; font-weight: 600; white-space: nowrap; }
 .badge-uptodate { background: #064e3b; color: #6ee7b7; }
 .badge-outdated { background: #7c2d12; color: #fdba74; }
 .badge-partial { background: #713f12; color: #fcd34d; }
@@ -61,7 +61,7 @@ td { font-size: .875rem; font-family: "SFMono-Regular",Consolas,"Liberation Mono
 </style>
 </head>
 <body>
-<h1>🐳 <span id="appTitle">Docker Image Watcher</span> <small id="status"></small> <span style="margin-left:auto;display:flex;align-items:center;gap:8px"><a href="#" id="langSwitch" style="color:#64748b;text-decoration:none;font-size:.75rem" onclick="switchLang();return false">IT</a><a href="#" id="logoutLink" style="color:#ef4444;text-decoration:none;font-size:.75rem" onclick="doLogout();return false">Logout</a><label style="font-size:.8rem;font-weight:400;display:flex;align-items:center;gap:6px;cursor:pointer"><span id="hideLabel">Hide up to date</span> <div class="toggle on" id="hideToggle"></div></label></span></h1>
+<h1>🐳 <span id="appTitle">Docker Image Watcher</span> <small id="status"></small> <span style="margin-left:auto;display:flex;align-items:center;gap:8px"><button id="updateAllBtn" class="btn btn-group" onclick="doGlobalUpdate()" hidden></button><a href="#" id="langSwitch" style="color:#64748b;text-decoration:none;font-size:.75rem" onclick="switchLang();return false">IT</a><a href="#" id="logoutLink" style="color:#ef4444;text-decoration:none;font-size:.75rem" onclick="doLogout();return false">Logout</a><label style="font-size:.8rem;font-weight:400;display:flex;align-items:center;gap:6px;cursor:pointer"><span id="hideLabel">Hide up to date</span> <div class="toggle on" id="hideToggle"></div></label></span></h1>
 <div class="warning-banner" id="rateLimitBanner" hidden>
   <div>
     <strong id="rateLimitTitle"></strong>
@@ -134,7 +134,7 @@ const i18n = {
     empty: 'Nessun container in esecuzione',
     emptyHint: 'Assicurati che il socket Docker sia montato e che i container siano attivi',
     uptodate: '✅ Aggiornato',
-    outdated: '🔄 Aggiornamento disp.',
+    outdated: '🔄 Da aggiornare',
     partial: '⚠️ Parziale',
     unknown: '❓ Sconosciuto',
     update: 'Aggiorna',
@@ -180,7 +180,8 @@ function applyL10N() {
 }
 
 function renderRateLimit() {
-  document.getElementById('rateLimitBanner').hidden = !rateLimited || rateLimitDismissed;
+  const banner = document.getElementById('rateLimitBanner');
+  banner.style.display = (!rateLimited || rateLimitDismissed) ? 'none' : 'flex';
 }
 
 async function checkRateLimit() {
@@ -220,6 +221,10 @@ async function load() {
 function render(groups) {
   const tbody = document.getElementById('rows');
   const counts = { uptodate: 0, outdated: 0, unknown: 0, partial: 0 };
+  const totalOutdated = groups.reduce((sum, g) => sum + g.containers.filter(c => c.status === 'outdated').length, 0);
+  const updateAllBtn = document.getElementById('updateAllBtn');
+  updateAllBtn.hidden = totalOutdated === 0;
+  updateAllBtn.textContent = t.updateAll(totalOutdated);
   let html = '';
   if (groups.length === 0) {
     html = '<tr><td colspan="5"><div class="empty">' + esc(t.empty) + '<br><p>' + esc(t.emptyHint) + '</p></div></td></tr>';
@@ -238,7 +243,7 @@ function render(groups) {
         <td class="digest">${esc(g.remote_digest)}</td>
         <td><span class="badge ${gBadgeClass}">${gBadgeLabel}</span></td>
         <td></td>
-        <td>${outdated > 0 ? `<button class="btn btn-group" data-image="${esc(g.image)}" data-cids="${esc(outdatedCids.join(','))}" onclick="doGroupUpdate(this)">${esc(t.updateAll(total))}</button>` : ''}</td>
+        <td>${outdated > 0 && total > 1 ? `<button class="btn btn-group" data-image="${esc(g.image)}" data-cids="${esc(outdatedCids.join(','))}" onclick="doGroupUpdate(this)">${esc(t.updateAll(total))}</button>` : ''}</td>
       </tr>`;
       for (const c of g.containers) {
         if (!showAll && c.status === 'uptodate') continue;
@@ -305,6 +310,32 @@ async function doGroupUpdate(btn) {
       body: JSON.stringify({ image })
     });
     for (const cid of cids) pollProgress(cid);
+    setTimeout(load, 2000);
+  } catch(e) {
+    btn.textContent = t.errorLabel;
+  }
+}
+
+async function doGlobalUpdate() {
+  const btn = document.getElementById('updateAllBtn');
+  btn.disabled = true;
+  btn.textContent = t.updatingLabel;
+  try {
+    const res = await fetch('/api/images');
+    if (res.status === 401) {
+      window.location.href = '/login.html';
+      return;
+    }
+    const groups = await res.json();
+    for (const g of groups) {
+      const outdated = g.containers.filter(c => c.status === 'outdated');
+      if (outdated.length === 0) continue;
+      await fetch('/api/groups/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: g.image })
+      });
+    }
     setTimeout(load, 2000);
   } catch(e) {
     btn.textContent = t.errorLabel;

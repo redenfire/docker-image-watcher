@@ -20,7 +20,7 @@ Current phase: Implementation
 
 ## Current objective
 
-Complete TASK-007 auth fixes for email-style usernames, effective login throttling, and expired-session redirect behavior while keeping private Forgejo `main` close to upstream application state.
+Complete TASK-007 auth fixes and TASK-008 UI improvements while keeping private Forgejo `main` close to upstream application state.
 
 ## Working state
 
@@ -43,6 +43,7 @@ Complete TASK-007 auth fixes for email-style usernames, effective login throttli
 - Web UI surfaces current Docker pull rate-limit state through a dismissible warning banner.
 - Last pull error for a container persists in UI until a later successful pull clears it.
 - TASK-007 implementation is in progress for auth/session correctness issues discovered during review.
+- TASK-008 implementation is in progress for rate-limit banner dismissal, update action cleanup, and status badge polish.
 
 ### What does not work yet
 
@@ -75,8 +76,8 @@ Complete TASK-007 auth fixes for email-style usernames, effective login throttli
 ## Last meaningful update
 
 - Date: 2026-07-04
-- Summary: Started TASK-007 auth/session fixes covering `@` usernames, login throttle host normalization, and expired-session redirect behavior.
+- Summary: Started TASK-008 UI improvements for banner dismissal, global update action, and status badge readability while TASK-007 auth fixes remain active.
 
 ## Next action
 
-Finish validating TASK-007 auth fixes with live login/session checks, then decide whether to upstream the app-side changes.
+Validate TASK-008 UI behavior in browser, then continue TASK-007 and TASK-008 completion/verification before deciding what to upstream.
