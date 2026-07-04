@@ -42,6 +42,18 @@ func dockerClient() *http.Client {
 	}
 }
 
+func pullStreamDockerClient() *http.Client {
+	return &http.Client{
+		Transport: &http.Transport{
+			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+				dialer := &net.Dialer{Timeout: 30 * time.Second}
+				return dialer.DialContext(ctx, "unix", dockerSocket)
+			},
+			ResponseHeaderTimeout: 30 * time.Second,
+		},
+	}
+}
+
 func dockerAPI(method, path string, body io.Reader) (*http.Response, error) {
 	client := dockerClient()
 	url := "http://localhost" + path
@@ -98,10 +110,39 @@ func IsRateLimitError(err error) bool {
 		strings.Contains(msg, "too many requests")
 }
 
+func registryAliases(hostname string) []string {
+	switch hostname {
+	case "registry-1.docker.io", "docker.io", "index.docker.io", "https://index.docker.io/v1/":
+		return []string{"https://index.docker.io/v1/", "registry-1.docker.io", "docker.io", "index.docker.io"}
+	default:
+		return []string{hostname}
+	}
+}
+
+func buildRegistryAuthHeader(serverAddress, auth string) (string, error) {
+	username, password, ok := strings.Cut(auth, ":")
+	if !ok || username == "" || password == "" {
+		return "", fmt.Errorf("invalid registry auth, expected username:password")
+	}
+	payload, err := json.Marshal(struct {
+		Username      string `json:"username"`
+		Password      string `json:"password"`
+		ServerAddress string `json:"serveraddress,omitempty"`
+	}{
+		Username:      username,
+		Password:      password,
+		ServerAddress: serverAddress,
+	})
+	if err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(payload), nil
+}
+
 func pullImageStream(image string, progressFn func(PullProgress)) error {
 	v := url.Values{}
 	v.Set("fromImage", image)
-	client := dockerClient()
+	client := pullStreamDockerClient()
 	req, err := http.NewRequest("POST", "http://localhost/images/create?"+v.Encode(), nil)
 	if err != nil {
 		return fmt.Errorf("pull request: %w", err)
@@ -109,30 +150,40 @@ func pullImageStream(image string, progressFn func(PullProgress)) error {
 	req.Header.Set("Content-Type", "application/json")
 	auth := strings.TrimSpace(os.Getenv("DOCKER_REGISTRY_AUTH"))
 	if auth != "" {
-		username, password, ok := strings.Cut(auth, ":")
-		if !ok || username == "" || password == "" {
-			return fmt.Errorf("registry auth: invalid DOCKER_REGISTRY_AUTH, expected username:password")
+		registry := ""
+		if host, _, _, ok := parseImage(image); ok {
+			registry = host
 		}
-		serverAddress := ""
-		if registry, _, _, ok := parseImage(image); ok {
-			serverAddress = registry
-			if serverAddress == "registry-1.docker.io" {
-				serverAddress = "https://index.docker.io/v1/"
+		aliases := registryAliases(registry)
+		header := ""
+		var authByRegistry map[string]string
+		if strings.HasPrefix(auth, "{") {
+			if err := json.Unmarshal([]byte(auth), &authByRegistry); err != nil {
+				return fmt.Errorf("registry auth: invalid JSON auth map: %w", err)
+			}
+			for _, alias := range aliases {
+				if creds, ok := authByRegistry[alias]; ok && strings.TrimSpace(creds) != "" {
+					header, err = buildRegistryAuthHeader(alias, creds)
+					if err != nil {
+						return fmt.Errorf("registry auth: %w", err)
+					}
+					break
+				}
+			}
+		} else {
+			for _, alias := range aliases {
+				if alias == "https://index.docker.io/v1/" {
+					header, err = buildRegistryAuthHeader(alias, auth)
+					if err != nil {
+						return fmt.Errorf("registry auth: %w", err)
+					}
+					break
+				}
 			}
 		}
-		payload, err := json.Marshal(struct {
-			Username      string `json:"username"`
-			Password      string `json:"password"`
-			ServerAddress string `json:"serveraddress,omitempty"`
-		}{
-			Username:      username,
-			Password:      password,
-			ServerAddress: serverAddress,
-		})
-		if err != nil {
-			return fmt.Errorf("registry auth: %w", err)
+		if header != "" {
+			req.Header.Set("X-Registry-Auth", header)
 		}
-		req.Header.Set("X-Registry-Auth", base64.StdEncoding.EncodeToString(payload))
 	}
 	resp, err := client.Do(req)
 	if err != nil {
