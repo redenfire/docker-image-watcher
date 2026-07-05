@@ -26,6 +26,30 @@ Each task should include:
 
 ## Active tasks
 
+### TASK-009 — Fork README disclaimer + GitHub build workflow
+
+Status: IN PROGRESS
+
+Goal:
+Update fork-facing README messaging and GitHub Actions image publishing so this repository clearly identifies itself as a testing fork with latest-only fork images.
+
+Files likely involved:
+- `README.md`
+- `.github/workflows/build.yml`
+- `docs/TASKS.md`
+- `docs/STATUS.md`
+
+Checks to run:
+- `go build ./...`
+- `go vet ./...`
+- `git diff --name-only`
+- manual README render check for disclaimer box
+- manual workflow review for `ghcr.io/neomod/docker-image-watcher`
+
+Notes / risks:
+- GitHub PR-event package pushes depend on repository token permissions at runtime.
+- Upstream image examples must remain pointed at `ghcr.io/redenfire/docker-image-watcher:latest`.
+
 ### TASK-008 — UI improvements for rate-limit banner, update buttons, and status badges
 
 Status: IN PROGRESS

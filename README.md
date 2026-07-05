@@ -1,8 +1,15 @@
 # 🐳 Docker Image Watcher
 
+> [!IMPORTANT]
+> This repository is NeoMod testing fork of [`redenfire/docker-image-watcher`](https://github.com/redenfire/docker-image-watcher).
+> GitHub Actions in this fork publish latest-only test images to `ghcr.io/neomod/docker-image-watcher`.
+> Stable users should prefer upstream repository and upstream image tags.
+
 Minimal Docker image update monitor with web UI. Checks running containers against their registry, shows outdated images, and can auto-update.
 
 ## Quick Start
+
+If you want stable/default deployment, keep using upstream image `ghcr.io/redenfire/docker-image-watcher:latest`. Fork image `ghcr.io/neomod/docker-image-watcher` is for testing latest fork changes only.
 
 ```bash
 docker run -d \

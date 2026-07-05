@@ -20,7 +20,7 @@ Current phase: Implementation
 
 ## Current objective
 
-Complete TASK-007 auth fixes and TASK-008 UI improvements while keeping private Forgejo `main` close to upstream application state.
+Complete TASK-007 auth fixes, TASK-008 UI improvements, and TASK-009 fork README/build workflow updates while keeping private Forgejo `main` close to upstream application state.
 
 ## Working state
 
@@ -42,8 +42,11 @@ Complete TASK-007 auth fixes and TASK-008 UI improvements while keeping private 
 - Docker pull path supports optional authenticated registry pulls via `DOCKER_REGISTRY_AUTH`, including Docker Hub shorthand and JSON multi-registry credentials.
 - Web UI surfaces current Docker pull rate-limit state through a dismissible warning banner.
 - Last pull error for a container persists in UI until a later successful pull clears it.
+- README now identifies this repository as a NeoMod testing fork and keeps upstream image examples as default guidance for stable users.
+- GitHub Actions workflow now targets `ghcr.io/neomod/docker-image-watcher`, publishing `latest` from `main`, `pr-<sha>` for PR events, and `pr-<branch>-<sha>` for `pr/*` branch pushes.
 - TASK-007 implementation is in progress for auth/session correctness issues discovered during review.
 - TASK-008 implementation is in progress for rate-limit banner dismissal, update action cleanup, and status badge polish.
+- TASK-009 implementation is in progress for fork-facing README and GitHub build-image behavior.
 
 ### What does not work yet
 
@@ -76,8 +79,8 @@ Complete TASK-007 auth fixes and TASK-008 UI improvements while keeping private 
 ## Last meaningful update
 
 - Date: 2026-07-04
-- Summary: Started TASK-008 UI improvements for banner dismissal, global update action, and status badge readability while TASK-007 auth fixes remain active.
+- Summary: Applied TASK-009 fork README/build workflow updates while TASK-007 auth fixes and TASK-008 UI improvements remain active.
 
 ## Next action
 
-Validate TASK-008 UI behavior in browser, then continue TASK-007 and TASK-008 completion/verification before deciding what to upstream.
+Validate TASK-008 UI behavior in browser, continue TASK-007 auth verification, and confirm GitHub Actions publishes expected TASK-009 fork image tags on next `main`, `pr/*`, or PR run.
