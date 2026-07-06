@@ -252,7 +252,7 @@ function render(groups) {
           <td class="name-cell"><span class="container-name">├─ ${esc(c.container_name)}</span></td>
           <td class="digest">${esc(c.local_digest)}</td>
           <td></td>
-          <td><div class="toggle ${c.auto_update ? 'on' : ''}" data-cid="${esc(c.container_id)}" onclick="toggle(this)"></div></td>
+          <td><div class="toggle ${c.auto_update ? 'on' : ''}" style="cursor:default"></div></td>
           <td><div class="progress-cell" id="progress-${esc(c.container_id)}">${isUpdating ? '<div class="progress-bar"><div class="bar"><div class="fill" style="width:0%"></div></div><span class="pct">0%</span></div>' : `<button class="btn btn-update" data-cid="${esc(c.container_id)}" onclick="doUpdate(this)" ${c.status !== 'outdated' ? 'disabled' : ''}>${esc(t.update)}</button>`}</div>${c.error ? `<div style="color:#ef4444;font-size:.7rem;margin-top:4px;word-break:break-all">${esc(c.error)}</div>` : ''}</td>
         </tr>`;
       }
@@ -265,18 +265,6 @@ function render(groups) {
     <span><span class="dot dot-yellow"></span>${counts.partial || 0} ${esc(t.partialLabel)}</span>
     <span><span class="dot dot-gray"></span>${counts.unknown || 0} ${esc(t.unknownLabel)}</span>`;
   document.getElementById('lastCheck').textContent = t.lastCheck + new Date().toLocaleTimeString();
-}
-
-async function toggle(el) {
-  const cid = el.dataset.cid;
-  el.classList.toggle('on');
-  try {
-    const res = await fetch(`/api/images/${cid}/auto-update`, { method: 'POST' });
-    const data = await res.json();
-    el.classList.toggle('on', data.auto_update);
-  } catch(e) {
-    el.classList.toggle('on');
-  }
 }
 
 async function doUpdate(btn) {

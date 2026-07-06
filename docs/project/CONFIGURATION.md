@@ -6,7 +6,6 @@
 |---|---|---|
 | `PORT` | `8080` | HTTP listen port for web UI and API |
 | `DOCKER_SOCK` | `/var/run/docker.sock` | Unix socket path used for Docker Engine API |
-| `AUTO_FILE` | `/data/auto-update.json` | JSON file storing per-container auto-update state |
 | `CHECK_INTERVAL` | `10m` | Interval for background digest check loop |
 | `CHECK_CONCURRENCY` | `5` | Max concurrent registry requests during check |
 | `AUTO_COOLDOWN` | `5m` | Cooldown window between auto-updates for same container |
@@ -52,20 +51,24 @@
 - Useful for custom Unix socket paths or rootless Docker setups where socket lives elsewhere
 - Compose file passes `DOCKER_SOCK=/var/run/docker.sock` explicitly
 
-### `AUTO_FILE`
+### `AUTO_COOLDOWN`
 
-- Read in `main.go`
-- Defaults to `/data/auto-update.json`
-- Stores JSON map like:
+- Read in `main.go` via `getEnvDuration`
+- Defaults to `5m` (5 minutes)
+- Prevents repeated auto-updates for the same container within the window
 
-```json
-{
-  "3d4c5b6a7f8e": true,
-  "9f8e7d6c5b4a": false
-}
+## Docker Label for Auto-Update
+
+Auto-update is enabled via the Docker label `image-watch.auto-update` on the container:
+
+```yaml
+services:
+  my-service:
+    labels:
+      - "image-watch.auto-update=true"
 ```
 
-- Persist `/data` with volume mount to keep toggle state across restarts
+This label survives recreate because `recreateContainer()` copies labels from the old container. See [`AUTO-UPDATE.md`](AUTO-UPDATE.md) for details.
 
 ## Docker Compose Notes
 
@@ -73,8 +76,7 @@ Current `docker-compose.yml`:
 
 - publishes `8099:8080`
 - mounts Docker socket at `/var/run/docker.sock`
-- mounts named volume `image-watch-data:/data`
-- sets `PORT`, `DOCKER_SOCK`, and `AUTO_FILE`
+- sets `PORT` and `DOCKER_SOCK`
 
 Example:
 
@@ -88,11 +90,9 @@ services:
       - "8099:8080"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - image-watch-data:/data
     environment:
       - PORT=8080
       - DOCKER_SOCK=/var/run/docker.sock
-      - AUTO_FILE=/data/auto-update.json
 ```
 
 ## Volume Mounts
@@ -110,13 +110,7 @@ Required so Image Watch can:
 - pull images
 - stop/remove/create/start containers
 
-### Data volume
-
-```text
-image-watch-data:/data
-```
-
-Recommended so auto-update preferences survive container recreation and host restarts.
+The previous `image-watch-data:/data` data volume is no longer needed since auto-update state is read from Docker labels, not from a file.
 
 ## Registry Access Tips
 

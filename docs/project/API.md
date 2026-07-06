@@ -40,7 +40,7 @@ Fields:
 - `container_name`: Docker container name without leading `/`
 - `local_digest`: shortened local digest or `unknown`
 - `status`: `uptodate`, `outdated`, or `unknown`
-- `auto_update`: persisted toggle state for this container
+- `auto_update`: read from Docker label `image-watch.auto-update` on the container
 
 ### `PullProgress`
 
@@ -109,7 +109,7 @@ curl -X POST http://localhost:8099/api/images/3d4c5b6a7f8e/update
 
 ### `POST /api/images/{id}/auto-update`
 
-Toggle auto-update for given container.
+Returns the current auto-update state for the given container, read from the Docker label `image-watch.auto-update`. The endpoint is read-only — enable/disable by setting the label on the container definition.
 
 Success response:
 
@@ -218,7 +218,7 @@ Common errors emitted by handlers:
 | Status | Body | When |
 |---|---|---|
 | `400` | `bad path: /api/images/{id}/{action}\n` | Path after `/api/images/` does not contain exactly `{id}/{action}` |
-| `400` | `unknown action\n` | Action is not `update`, `auto-update`, or `progress` |
+| `400` | `unknown action\n` | Action is not `update`, `auto-update`, or `progress` (`auto-update` is now read-only) |
 | `404` | `container not found\n` | Container ID is not present in current `app.images` snapshot |
 | `404` | `no progress\n` | No active progress snapshot for given container |
 | `405` | `method not allowed\n` | Wrong HTTP method used for endpoint |

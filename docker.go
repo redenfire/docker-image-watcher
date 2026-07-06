@@ -18,10 +18,11 @@ import (
 var dockerSocket = "/var/run/docker.sock"
 
 type dockerContainer struct {
-	ID      string   `json:"Id"`
-	Names   []string `json:"Names"`
-	Image   string   `json:"Image"`
-	ImageID string   `json:"ImageID"`
+	ID      string            `json:"Id"`
+	Names   []string          `json:"Names"`
+	Image   string            `json:"Image"`
+	ImageID string            `json:"ImageID"`
+	Labels  map[string]string `json:"Labels"`
 }
 
 type dockerInspect struct {

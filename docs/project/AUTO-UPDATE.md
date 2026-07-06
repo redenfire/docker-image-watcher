@@ -2,36 +2,31 @@
 
 ## How It Is Enabled
 
-Auto-update can be toggled:
+Auto-update is controlled via the Docker label `image-watch.auto-update` on the container.
 
-- from web UI toggle in `web/index.html`
-- via `POST /api/images/{id}/auto-update`
+To enable, add the label to your container or service:
 
-Toggle state is returned as:
-
-```json
-{"auto_update":true}
+```yaml
+services:
+  my-service:
+    labels:
+      - "image-watch.auto-update=true"
 ```
 
-## Persistence Model
+The label is **declarative**: it survives every recreate (manual or automatic) because `recreateContainer()` copies existing labels from the old container to the new one during `inspect -> stop -> remove -> create -> start`.
 
-State is stored as JSON map in `AUTO_FILE`.
+The web UI displays the current auto-update state (read from the label) but does not allow toggling — the label must be set in the container definition (e.g., `docker-compose.yml`).
 
-Example:
+The `POST /api/images/{id}/auto-update` endpoint still returns the current state, but does not modify it.
 
-```json
-{
-  "3d4c5b6a7f8e": true,
-  "9f8e7d6c5b4a": false
-}
-```
+## Why Labels Instead of a File
 
-Implementation points:
+| Approach | Survives recreate? | Declarative? |
+|---|---|---|
+| `auto-update.json` (previous) | No — new container ID = lost state | No |
+| Docker label `image-watch.auto-update` (current) | Yes — labels are copied on recreate | Yes |
 
-- `App.autoSaved` keeps in-memory map
-- `loadAuto()` reads file on startup
-- `saveAuto()` writes file after each toggle
-- keys use short 12-character container IDs
+This makes auto-update a true lifecycle feature rather than a one-shot toggle.
 
 ## Check Interval
 
@@ -57,13 +52,13 @@ This avoids repeated rapid recreate cycles when a container stays reported as ou
 Auto-update only triggers when all conditions are true:
 
 - container appears in current running container list
-- auto-update is enabled for that container
+- container has label `image-watch.auto-update=true`
 - computed status is `outdated`
 - no active cooldown (default 5 min, configurable via `AUTO_COOLDOWN`) blocks that container
 
 ## Concurrency and State Safety
 
-- `sync.RWMutex` protects `images`, `autoSaved`, and `cooldowns`
+- `sync.RWMutex` protects `images` and `cooldowns`
 - `sync.Map` stores pull progress snapshots
 - route-triggered manual updates run in goroutines
 - cooldown tracking reduces risk of concurrent repeated auto-updates for same container

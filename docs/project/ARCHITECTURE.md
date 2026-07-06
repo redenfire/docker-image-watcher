@@ -70,7 +70,7 @@ Runtime dependencies:
 ### `web/index.html`
 
 - Polls `/api/images` every 10 seconds
-- Shows container table, digest comparison, status badges, progress UI, and auto-update toggles
+- Shows container table, digest comparison, status badges, progress UI, and auto-update indicators (read from Docker labels)
 - Calls API routes (images, groups, auth) directly from browser JavaScript
 
 ## Key Call Chains
@@ -104,14 +104,15 @@ main.go:updateContainer()
 -> main.go:checkAll()
 ```
 
-### Auto-update persistence
+### Auto-update detection
 
 ```text
-main.go:toggleAuto()
--> update app.images
--> update app.autoSaved
--> saveAuto()
--> write AUTO_FILE JSON map
+main.go:checkAll()
+-> docker.go:listContainers()
+   (includes Labels in dockerContainer struct)
+-> for each container:
+   -> read label "image-watch.auto-update"
+   -> set item.AutoUpdate = true if label equals "true"
 ```
 
 ## Route-to-Handler Mapping
@@ -123,7 +124,7 @@ main.go:toggleAuto()
 | `/api/auth/status` | `GET` | inline handler | Returns JSON `{"enabled": true/false}` |
 | `/api/images` | `GET` | `app.handleImages` | Returns JSON array of `ImageGroup` |
 | `/api/images/{id}/update` | `POST` | `app.handleImageAction` | Starts async update goroutine |
-| `/api/images/{id}/auto-update` | `POST` | `app.handleImageAction` | Toggles persisted auto-update flag |
+| `/api/images/{id}/auto-update` | `POST` | `app.handleImageAction` | Returns current auto-update state from Docker label (read-only) |
 | `/api/images/{id}/progress` | `GET` | `app.handleImageAction` | Returns `PullProgress` for in-flight update |
 | `/api/groups/{image}/update` | `POST` | `app.handleGroupAction` | Starts async update for all containers of an image |
 | `/api/login` | `POST` | `handleLogin` | Authenticates user, returns session cookie |
@@ -132,7 +133,7 @@ main.go:toggleAuto()
 
 ## Concurrency Model
 
-- `sync.RWMutex` protects `images`, `autoSaved`, and `cooldowns`
+- `sync.RWMutex` protects `images` and `cooldowns`
 - `sync.Map` stores per-container progress snapshots
 - Manual update runs in goroutine from route handler
 - Periodic checks run in background ticker goroutine

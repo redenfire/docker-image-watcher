@@ -7,17 +7,12 @@ services:
       - "8099:8080"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - image-watch-data:/data
     environment:
       - PORT=8080
       - DOCKER_SOCK=/var/run/docker.sock
-      - AUTO_FILE=/data/auto-update.json
       # - CHECK_INTERVAL=10m      # default: 10m
       # - CHECK_CONCURRENCY=5     # default: 5
       # - AUTO_COOLDOWN=5m        # default: 5m
       # - AUTH_USER=admin         # uncomment to enable auth
       # - AUTH_PASS=changeme
       # - DOCKER_REGISTRY_AUTH=username:password  # uncomment to avoid Docker Hub unauthenticated pull rate limits
-
-volumes:
-  image-watch-data:

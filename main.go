@@ -215,8 +215,6 @@ type ImageGroup struct {
 type App struct {
 	mu              sync.RWMutex
 	images          []ImageGroup
-	autoFile        string
-	autoSaved       map[string]bool
 	cooldowns       map[string]time.Time
 	containerErrors map[string]string
 	rateLimited     bool
@@ -230,18 +228,11 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
-	autoFile := os.Getenv("AUTO_FILE")
-	if autoFile == "" {
-		autoFile = "/data/auto-update.json"
-	}
 
 	app := &App{
-		autoFile:        autoFile,
-		autoSaved:       make(map[string]bool),
 		cooldowns:       make(map[string]time.Time),
 		containerErrors: make(map[string]string),
 	}
-	app.loadAuto()
 	if host, err := os.Hostname(); err == nil && len(host) >= 12 {
 		app.selfCID = host[:12]
 		log.Printf("self CID: %s", app.selfCID)
@@ -406,7 +397,6 @@ func (app *App) handleImageAction(w http.ResponseWriter, r *http.Request) {
 		go app.updateContainer(cid)
 		w.Write([]byte(`{"status":"updating"}`))
 	case "auto-update":
-		app.toggleAuto(cid)
 		app.mu.RLock()
 		c := app.findContainer(cid)
 		on := c != nil && c.AutoUpdate
@@ -469,18 +459,12 @@ func (app *App) checkAll() {
 		return
 	}
 
-	app.mu.Lock()
-	autoMap := make(map[string]bool)
-	for k, v := range app.autoSaved {
-		autoMap[k] = v
-	}
-	app.mu.Unlock()
-
 	type groupEntry struct {
 		cid      string
 		name     string
 		imgID    string
 		imageTag string
+		labels   map[string]string
 	}
 	groups := make(map[string][]groupEntry)
 	for _, c := range containers {
@@ -512,6 +496,7 @@ func (app *App) checkAll() {
 			name:     entryName,
 			imgID:    c.ImageID,
 			imageTag: c.Image,
+			labels:   c.Labels,
 		})
 	}
 
@@ -574,8 +559,8 @@ func (app *App) checkAll() {
 					gUpToDate++
 				}
 
-				if auto, ok := autoMap[e.cid]; ok {
-					item.AutoUpdate = auto
+				if e.labels["image-watch.auto-update"] == "true" {
+					item.AutoUpdate = true
 				}
 				app.mu.RLock()
 				item.Error = app.containerErrors[e.cid]
@@ -698,50 +683,6 @@ func (app *App) updateContainer(cid string) {
 	app.progress.Delete(cid)
 	log.Printf("updated %s -> %s", containerName, image)
 	app.checkAll()
-}
-
-func (app *App) toggleAuto(cid string) {
-	if cid == app.selfCID {
-		return
-	}
-	app.mu.Lock()
-	defer app.mu.Unlock()
-	for i := range app.images {
-		for j := range app.images[i].Containers {
-			if app.images[i].Containers[j].ContainerID == cid {
-				app.images[i].Containers[j].AutoUpdate = !app.images[i].Containers[j].AutoUpdate
-				app.autoSaved[cid] = app.images[i].Containers[j].AutoUpdate
-				return
-			}
-		}
-	}
-}
-
-func (app *App) loadAuto() {
-	data, err := os.ReadFile(app.autoFile)
-	if err != nil {
-		return
-	}
-	app.mu.Lock()
-	defer app.mu.Unlock()
-	json.Unmarshal(data, &app.autoSaved)
-}
-
-func saveAuto(auto map[string]bool, p string) {
-	data, err := json.Marshal(auto)
-	if err != nil {
-		log.Printf("save auto: marshal: %v", err)
-		return
-	}
-	if i := strings.LastIndex(p, "/"); i > 0 {
-		if err := os.MkdirAll(p[:i], 0700); err != nil {
-			log.Printf("save auto: mkdir: %v", err)
-			return
-		}
-	}
-	if err := os.WriteFile(p, data, 0600); err != nil {
-		log.Printf("save auto: write: %v", err)
-	}
 }
 
 func shortenDigest(d string) string {
