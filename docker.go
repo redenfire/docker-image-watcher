@@ -293,6 +293,30 @@ func getImageDigest(imageID string) (string, error) {
 	return "", fmt.Errorf("no digest found")
 }
 
+func localDigestMatches(imageID, imageTag, remoteDigest string) bool {
+	for _, ref := range []string{imageID, imageTag} {
+		if ref == "" {
+			continue
+		}
+		resp, err := dockerAPI("GET", "/images/"+ref+"/json", nil)
+		if err != nil {
+			continue
+		}
+		var data struct {
+			RepoDigests []string `json:"RepoDigests"`
+		}
+		json.NewDecoder(resp.Body).Decode(&data)
+		resp.Body.Close()
+		for _, d := range data.RepoDigests {
+			_, after, ok := strings.Cut(d, "@")
+			if ok && after == remoteDigest {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func resolveImageName(imageID string) string {
 	resp, err := dockerAPI("GET", "/images/"+imageID+"/json", nil)
 	if err != nil {

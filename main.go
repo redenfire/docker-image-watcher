@@ -564,7 +564,7 @@ func (app *App) checkAll() {
 				} else if remoteErr != nil {
 					item.LocalDigest = shortenDigest(localDigest)
 					item.Status = "unknown"
-				} else if localDigest != remoteDigest {
+				} else if !localDigestMatches(e.imgID, e.imageTag, remoteDigest) {
 					item.LocalDigest = shortenDigest(localDigest)
 					item.Status = "outdated"
 					gOutdated++
