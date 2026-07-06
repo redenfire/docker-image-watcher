@@ -490,7 +490,13 @@ func (app *App) checkAll() {
 		if app.selfCID != "" && c.ID[:12] == app.selfCID {
 			continue
 		}
-		cleanImage := c.Image
+		imageRef := c.Image
+		if !strings.Contains(imageRef, "/") && !strings.Contains(imageRef, ":") {
+			if r := resolveImageName(c.ImageID); r != "" {
+				imageRef = r
+			}
+		}
+		cleanImage := imageRef
 		if i := strings.Index(cleanImage, "@"); i >= 0 {
 			cleanImage = cleanImage[:i]
 		}

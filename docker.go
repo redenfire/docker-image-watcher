@@ -293,6 +293,26 @@ func getImageDigest(imageID string) (string, error) {
 	return "", fmt.Errorf("no digest found")
 }
 
+func resolveImageName(imageID string) string {
+	resp, err := dockerAPI("GET", "/images/"+imageID+"/json", nil)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	var data struct {
+		RepoTags []string `json:"RepoTags"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		return ""
+	}
+	for _, tag := range data.RepoTags {
+		if tag != "<none>:<none>" {
+			return tag
+		}
+	}
+	return ""
+}
+
 func recreateContainer(id, image string) error {
 	inspect, err := inspectContainer(id)
 	if err != nil {
