@@ -434,20 +434,27 @@ func (app *App) handleGroupAction(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *App) updateGroup(image string) {
-	app.mu.RLock()
-	var cids []string
-	for _, g := range app.images {
-		if g.Image == image {
-			for _, c := range g.Containers {
-				cids = append(cids, c.ContainerID)
+	seen := map[string]bool{}
+	for {
+		cid := ""
+		app.mu.RLock()
+		for _, g := range app.images {
+			if g.Image == image {
+				for _, c := range g.Containers {
+					if c.Status == "outdated" && !seen[c.ContainerID] {
+						cid = c.ContainerID
+						seen[cid] = true
+						goto found
+					}
+				}
+				break
 			}
-			break
 		}
-	}
-	app.mu.RUnlock()
-
-	log.Printf("updating group %s (%d containers)", image, len(cids))
-	for _, cid := range cids {
+		app.mu.RUnlock()
+		break
+	found:
+		app.mu.RUnlock()
+		log.Printf("updating %s in group %s", cid, image)
 		app.updateContainer(cid)
 	}
 }
