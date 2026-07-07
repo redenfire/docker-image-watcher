@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -22,12 +23,12 @@ func getRemoteDigest(image string) (string, error) {
 
 	baseURL := fmt.Sprintf("https://%s/v2/%s/manifests/%s", registry, repo, tag)
 
-	digest, code, headers, err := fetchManifest(baseURL, "")
+	digest, body, code, headers, err := fetchManifest(baseURL, "")
 	if err != nil {
 		return "", err
 	}
 	if code == 200 {
-		return digest, nil
+		return resolveManifest(digest, body, headers, registry, repo, "")
 	}
 	if code != 401 {
 		return "", fmt.Errorf("registry returned %d", code)
@@ -39,20 +40,74 @@ func getRemoteDigest(image string) (string, error) {
 		return "", fmt.Errorf("auth: %w", err)
 	}
 
-	digest, code, _, err = fetchManifest(baseURL, token)
+	digest, body, code, headers, err = fetchManifest(baseURL, token)
 	if err != nil {
 		return "", err
 	}
 	if code != 200 {
 		return "", fmt.Errorf("registry returned %d after auth", code)
 	}
-	return digest, nil
+	return resolveManifest(digest, body, headers, registry, repo, token)
 }
 
-func fetchManifest(url, token string) (digest string, code int, headers http.Header, err error) {
+func resolveManifest(digest string, body []byte, headers http.Header, registry, repo, token string) (string, error) {
+	ct := headers.Get("Content-Type")
+	if ct != "application/vnd.docker.distribution.manifest.list.v2+json" && ct != "application/vnd.oci.image.index.v1+json" {
+		return digest, nil
+	}
+	return resolvePlatformDigest(body, registry, repo, token)
+}
+
+type manifestListEntry struct {
+	Digest   string `json:"digest"`
+	Platform struct {
+		Architecture string `json:"architecture"`
+		OS           string `json:"os"`
+	} `json:"platform"`
+}
+
+type manifestList struct {
+	Manifests []manifestListEntry `json:"manifests"`
+}
+
+func resolvePlatformDigest(body []byte, registry, repo, token string) (string, error) {
+	var list manifestList
+	if err := json.Unmarshal(body, &list); err != nil {
+		return "", fmt.Errorf("parse manifest list: %w", err)
+	}
+	arch, os := runtime.GOARCH, runtime.GOOS
+	for _, m := range list.Manifests {
+		if m.Platform.Architecture == arch && m.Platform.OS == os {
+			platURL := fmt.Sprintf("https://%s/v2/%s/manifests/%s", registry, repo, m.Digest)
+			d, _, code, headers, err := fetchManifest(platURL, token)
+			if err != nil {
+				return "", err
+			}
+			if code == 200 {
+				return d, nil
+			}
+			if code == 401 && token == "" {
+				authHeader := headers.Get("Www-Authenticate")
+				t, err := getToken(authHeader, registry, repo)
+				if err != nil {
+					return "", fmt.Errorf("auth: %w", err)
+				}
+				d, _, _, _, err = fetchManifest(platURL, t)
+				if err != nil {
+					return "", err
+				}
+				return d, nil
+			}
+			return "", fmt.Errorf("registry returned %d for platform manifest", code)
+		}
+	}
+	return "", fmt.Errorf("no manifest for %s/%s", os, arch)
+}
+
+func fetchManifest(url, token string) (digest string, body []byte, code int, headers http.Header, err error) {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return "", 0, nil, err
+		return "", nil, 0, nil, err
 	}
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
@@ -61,12 +116,14 @@ func fetchManifest(url, token string) (digest string, code int, headers http.Hea
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return "", 0, nil, err
+		return "", nil, 0, nil, err
 	}
 	defer resp.Body.Close()
-	// drain body for connection reuse (best-effort)
-	io.Copy(io.Discard, resp.Body)
-	return resp.Header.Get("Docker-Content-Digest"), resp.StatusCode, resp.Header, nil
+	body, err = io.ReadAll(resp.Body)
+	if err != nil {
+		return "", nil, 0, nil, err
+	}
+	return resp.Header.Get("Docker-Content-Digest"), body, resp.StatusCode, resp.Header, nil
 }
 
 func getToken(authHeader, registry, repo string) (string, error) {
