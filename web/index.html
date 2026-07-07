@@ -108,6 +108,7 @@ const i18n = {
     updateAll: (n) => `Update all (${n})`,
     prune: 'Prune unused images',
     pruning: 'pruning...',
+    pruneProgress: 'Pruning in progress...',
     pruneSuccess: '✅ Done',
     pruneError: '❌ Action failed',
     lastCheck: 'Last check: ',
@@ -145,6 +146,7 @@ const i18n = {
     updateAll: (n) => `Aggiorna tutti (${n})`,
     prune: 'Prune immagini unused',
     pruning: 'pulizia...',
+    pruneProgress: 'Operazione in corso...',
     pruneSuccess: '✅ Operazione effettuata',
     pruneError: '❌ Errore azione',
     lastCheck: 'Ultimo controllo: ',
@@ -322,12 +324,16 @@ async function doPrune() {
   btn.textContent = t.pruning;
   try {
     const res = await fetch('/api/prune', { method: 'POST' });
-    btn.textContent = res.ok ? t.pruneSuccess : t.pruneError;
-    if (res.ok) { setTimeout(load, 2000); return; }
+    if (!res.ok) { btn.textContent = t.pruneError; setTimeout(load, 3000); return; }
+    btn.textContent = t.pruneProgress;
+    setTimeout(() => {
+      btn.textContent = t.pruneSuccess;
+      setTimeout(load, 2000);
+    }, 2000);
   } catch(_) {
     btn.textContent = t.pruneError;
+    setTimeout(load, 3000);
   }
-  setTimeout(load, 3000);
 }
 
 async function doGlobalUpdate() {
