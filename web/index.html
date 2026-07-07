@@ -61,7 +61,7 @@ td { font-size: .875rem; font-family: "SFMono-Regular",Consolas,"Liberation Mono
 </style>
 </head>
 <body>
-<h1>🐳 <span id="appTitle">Docker Image Watcher</span> <small id="status"></small> <span style="margin-left:auto;display:flex;align-items:center;gap:8px"><button id="updateAllBtn" class="btn btn-group" onclick="doGlobalUpdate()" hidden></button><a href="#" id="langSwitch" style="color:#64748b;text-decoration:none;font-size:.75rem" onclick="switchLang();return false">IT</a><a href="#" id="logoutLink" style="color:#ef4444;text-decoration:none;font-size:.75rem" onclick="doLogout();return false">Logout</a><label style="font-size:.8rem;font-weight:400;display:flex;align-items:center;gap:6px;cursor:pointer"><span id="hideLabel">Hide up to date</span> <div class="toggle on" id="hideToggle"></div></label></span></h1>
+<h1>🐳 <span id="appTitle">Docker Image Watcher</span> <small id="status"></small> <span style="margin-left:auto;display:flex;align-items:center;gap:8px"><button id="pruneBtn" class="btn btn-group" onclick="doPrune()" title="Prune unused images"></button><button id="updateAllBtn" class="btn btn-group" onclick="doGlobalUpdate()" hidden></button><a href="#" id="langSwitch" style="color:#64748b;text-decoration:none;font-size:.75rem" onclick="switchLang();return false">IT</a><a href="#" id="logoutLink" style="color:#ef4444;text-decoration:none;font-size:.75rem" onclick="doLogout();return false">Logout</a><label style="font-size:.8rem;font-weight:400;display:flex;align-items:center;gap:6px;cursor:pointer"><span id="hideLabel">Hide up to date</span> <div class="toggle on" id="hideToggle"></div></label></span></h1>
 <div class="warning-banner" id="rateLimitBanner" hidden>
   <div>
     <strong id="rateLimitTitle"></strong>
@@ -106,6 +106,8 @@ const i18n = {
     unknown: '❓ Unknown',
     update: 'Update',
     updateAll: (n) => `Update all (${n})`,
+    prune: 'Prune',
+    pruning: 'pruning...',
     lastCheck: 'Last check: ',
     upToDate: 'up to date',
     outdatedLabel: 'outdated',
@@ -139,6 +141,8 @@ const i18n = {
     unknown: '❓ Sconosciuto',
     update: 'Aggiorna',
     updateAll: (n) => `Aggiorna tutti (${n})`,
+    prune: 'Pulisci',
+    pruning: 'pulizia...',
     lastCheck: 'Ultimo controllo: ',
     upToDate: 'aggiornati',
     outdatedLabel: 'da aggiornare',
@@ -172,6 +176,7 @@ function applyL10N() {
   document.getElementById('thDigest').textContent = t.digest;
   document.getElementById('thStatus').textContent = t.status;
   document.getElementById('thAuto').textContent = t.auto;
+  document.getElementById('pruneBtn').textContent = t.prune;
   document.getElementById('logoutLink').textContent = t.logout;
   document.getElementById('rateLimitTitle').textContent = t.rateLimitTitle;
   document.getElementById('rateLimitBody').textContent = t.rateLimitBody;
@@ -298,6 +303,18 @@ async function doGroupUpdate(btn) {
       body: JSON.stringify({ image })
     });
     for (const cid of cids) pollProgress(cid);
+    setTimeout(load, 2000);
+  } catch(e) {
+    btn.textContent = t.errorLabel;
+  }
+}
+
+async function doPrune() {
+  const btn = document.getElementById('pruneBtn');
+  btn.disabled = true;
+  btn.textContent = t.pruning;
+  try {
+    await fetch('/api/prune', { method: 'POST' });
     setTimeout(load, 2000);
   } catch(e) {
     btn.textContent = t.errorLabel;

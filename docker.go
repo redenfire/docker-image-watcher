@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -439,6 +440,16 @@ func recreateContainer(id, image string) error {
 		return fmt.Errorf("start container %s: daemon returned %s", created.ID, resp.Status)
 	}
 	return nil
+}
+
+func pruneUnusedImages() {
+	resp, err := dockerAPI("POST", "/images/prune?filters="+url.QueryEscape(`{"dangling":{"true":true}}`), nil)
+	if resp != nil {
+		resp.Body.Close()
+	}
+	if err != nil {
+		log.Printf("prune images: %v", err)
+	}
 }
 
 func init() {

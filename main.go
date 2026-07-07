@@ -276,6 +276,7 @@ func main() {
 	mux.HandleFunc("/api/images", app.handleImages)
 	mux.HandleFunc("/api/images/", app.handleImageAction)
 	mux.HandleFunc("/api/groups/", app.handleGroupAction)
+	mux.HandleFunc("/api/prune", app.handlePrune)
 	mux.HandleFunc("/api/ratelimit", app.handleRateLimit)
 	mux.HandleFunc("/api/login", handleLogin)
 	mux.HandleFunc("/api/logout", handleLogout)
@@ -332,6 +333,18 @@ func (app *App) handleRateLimit(w http.ResponseWriter, r *http.Request) {
 	app.mu.RUnlock()
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]bool{"rate_limited": rateLimited})
+}
+
+func (app *App) handlePrune(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", 405)
+		return
+	}
+	go func() {
+		pruneUnusedImages()
+		app.checkAll()
+	}()
+	w.Write([]byte(`{"status":"pruning"}`))
 }
 
 func (app *App) findContainer(cid string) *ContainerItem {
