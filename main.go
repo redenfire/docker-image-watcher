@@ -680,8 +680,12 @@ func (app *App) updateContainer(cid string) {
 	app.mu.Unlock()
 	app.progress.Store(cid, PullProgress{Status: "recreating", Percent: 100})
 	if err := recreateContainer(cid, image); err != nil {
+		app.mu.Lock()
+		app.containerErrors[cid] = err.Error()
+		app.mu.Unlock()
 		app.progress.Store(cid, PullProgress{Status: "error: " + err.Error()})
 		log.Printf("recreate %s: %v", cid, err)
+		app.checkAll()
 		return
 	}
 	app.mu.Lock()

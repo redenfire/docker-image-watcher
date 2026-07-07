@@ -26,10 +26,11 @@ type dockerContainer struct {
 }
 
 type dockerInspect struct {
-	ID         string          `json:"Id"`
-	Name       string          `json:"Name"`
-	Config     json.RawMessage `json:"Config"`
-	HostConfig json.RawMessage `json:"HostConfig"`
+	ID              string          `json:"Id"`
+	Name            string          `json:"Name"`
+	Config          json.RawMessage `json:"Config"`
+	HostConfig      json.RawMessage `json:"HostConfig"`
+	NetworkSettings json.RawMessage `json:"NetworkSettings"`
 }
 
 func dockerClient() *http.Client {
@@ -351,40 +352,25 @@ func recreateContainer(id, image string) error {
 	createBody["Image"] = image
 	delete(createBody, "Hostname")
 
-	type hostCfg struct {
-		Binds         []string               `json:"Binds"`
-		PortBindings  map[string]interface{} `json:"PortBindings"`
-		RestartPolicy map[string]interface{} `json:"RestartPolicy"`
-		NetworkMode   string                 `json:"NetworkMode"`
-		Privileged    bool                   `json:"Privileged"`
-		ExtraHosts    []string               `json:"ExtraHosts"`
-		DNS           []string               `json:"Dns"`
-		CapAdd        []string               `json:"CapAdd"`
-		CapDrop       []string               `json:"CapDrop"`
-		Devices       []interface{}          `json:"Devices"`
-		ShmSize       int64                  `json:"ShmSize"`
-		Sysctls       map[string]string      `json:"Sysctls"`
-		Runtime       string                 `json:"Runtime"`
-		GroupAdd      []string               `json:"GroupAdd"`
-		IpcMode       string                 `json:"IpcMode"`
-		PidMode       string                 `json:"PidMode"`
-		UsernsMode    string                 `json:"UsernsMode"`
-		UTSMode       string                 `json:"UTSMode"`
-	}
-
-	var hc hostCfg
-	if err := json.Unmarshal(inspect.HostConfig, &hc); err != nil {
+	var hostConfig map[string]interface{}
+	if err := json.Unmarshal(inspect.HostConfig, &hostConfig); err != nil {
 		return fmt.Errorf("unmarshal host config: %w", err)
 	}
-	createBody["HostConfig"] = hc
+	createBody["HostConfig"] = hostConfig
 
-	if hc.NetworkMode != "" && hc.NetworkMode != "default" && hc.NetworkMode != "bridge" {
-		netConfig := map[string]interface{}{
-			"EndpointsConfig": map[string]interface{}{
-				hc.NetworkMode: map[string]interface{}{},
-			},
+	if inspect.NetworkSettings != nil {
+		var netSettings struct {
+			Networks map[string]json.RawMessage `json:"Networks"`
 		}
-		createBody["NetworkingConfig"] = netConfig
+		if err := json.Unmarshal(inspect.NetworkSettings, &netSettings); err == nil && len(netSettings.Networks) > 0 {
+			endpoints := make(map[string]interface{}, len(netSettings.Networks))
+			for netName := range netSettings.Networks {
+				endpoints[netName] = map[string]interface{}{}
+			}
+			createBody["NetworkingConfig"] = map[string]interface{}{
+				"EndpointsConfig": endpoints,
+			}
+		}
 	}
 
 	body, err := json.Marshal(createBody)
@@ -442,6 +428,9 @@ func recreateContainer(id, image string) error {
 	}
 	if err != nil {
 		return fmt.Errorf("start container %s: %w", created.ID, err)
+	}
+	if resp != nil && resp.StatusCode >= 400 {
+		return fmt.Errorf("start container %s: daemon returned %s", created.ID, resp.Status)
 	}
 	return nil
 }
