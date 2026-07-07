@@ -205,6 +205,9 @@ function dismissRateLimit() {
 }
 
 async function load() {
+  const pruneBtn = document.getElementById('pruneBtn');
+  pruneBtn.disabled = false;
+  pruneBtn.textContent = t.prune;
   const bar = document.getElementById('status');
   bar.textContent = t.checking;
   bar.parentElement.classList.add('checking');
@@ -314,11 +317,10 @@ async function doPrune() {
   btn.disabled = true;
   btn.textContent = t.pruning;
   try {
-    await fetch('/api/prune', { method: 'POST' });
-    setTimeout(load, 2000);
-  } catch(e) {
-    btn.textContent = t.errorLabel;
-  }
+    const res = await fetch('/api/prune', { method: 'POST' });
+    if (res.ok) { load(); return; }
+  } catch(_) {}
+  btn.textContent = t.errorLabel;
 }
 
 async function doGlobalUpdate() {
