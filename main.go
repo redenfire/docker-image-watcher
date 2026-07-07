@@ -701,8 +701,19 @@ func (app *App) updateContainer(cid string) {
 		app.checkAll()
 		return
 	}
+	var newDigest string
+	if d, err := getLocalDigest(image); err == nil {
+		newDigest = shortenDigest(d)
+	}
 	app.mu.Lock()
 	delete(app.containerErrors, cid)
+	if c := app.findContainer(cid); c != nil {
+		c.Status = "uptodate"
+		c.Error = ""
+		if newDigest != "" {
+			c.LocalDigest = newDigest
+		}
+	}
 	app.mu.Unlock()
 	app.progress.Delete(cid)
 	log.Printf("updated %s -> %s", containerName, image)
