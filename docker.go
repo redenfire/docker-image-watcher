@@ -360,12 +360,18 @@ func recreateContainer(id, image string) error {
 
 	if inspect.NetworkSettings != nil {
 		var netSettings struct {
-			Networks map[string]json.RawMessage `json:"Networks"`
+			Networks map[string]map[string]interface{} `json:"Networks"`
 		}
 		if err := json.Unmarshal(inspect.NetworkSettings, &netSettings); err == nil && len(netSettings.Networks) > 0 {
 			endpoints := make(map[string]interface{}, len(netSettings.Networks))
-			for netName := range netSettings.Networks {
-				endpoints[netName] = map[string]interface{}{}
+			for netName, netData := range netSettings.Networks {
+				ep := map[string]interface{}{}
+				for _, k := range []string{"IPAMConfig", "Aliases", "Links", "DriverOpts"} {
+					if v, ok := netData[k]; ok {
+						ep[k] = v
+					}
+				}
+				endpoints[netName] = ep
 			}
 			createBody["NetworkingConfig"] = map[string]interface{}{
 				"EndpointsConfig": endpoints,
