@@ -108,6 +108,8 @@ const i18n = {
     updateAll: (n) => `Update all (${n})`,
     prune: 'Prune unused images',
     pruning: 'pruning...',
+    pruneSuccess: '✅ Done',
+    pruneError: '❌ Action failed',
     lastCheck: 'Last check: ',
     upToDate: 'up to date',
     outdatedLabel: 'outdated',
@@ -143,6 +145,8 @@ const i18n = {
     updateAll: (n) => `Aggiorna tutti (${n})`,
     prune: 'Prune immagini unused',
     pruning: 'pulizia...',
+    pruneSuccess: '✅ Operazione effettuata',
+    pruneError: '❌ Errore azione',
     lastCheck: 'Ultimo controllo: ',
     upToDate: 'aggiornati',
     outdatedLabel: 'da aggiornare',
@@ -318,9 +322,12 @@ async function doPrune() {
   btn.textContent = t.pruning;
   try {
     const res = await fetch('/api/prune', { method: 'POST' });
-    if (res.ok) { load(); return; }
-  } catch(_) {}
-  btn.textContent = t.errorLabel;
+    btn.textContent = res.ok ? t.pruneSuccess : t.pruneError;
+    if (res.ok) { setTimeout(load, 2000); return; }
+  } catch(_) {
+    btn.textContent = t.pruneError;
+  }
+  setTimeout(load, 3000);
 }
 
 async function doGlobalUpdate() {
