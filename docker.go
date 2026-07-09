@@ -296,25 +296,23 @@ func getImageDigest(imageID string) (string, error) {
 	return "", fmt.Errorf("no digest found")
 }
 
-func localDigestMatches(imageID, imageTag, remoteDigest string) bool {
-	for _, ref := range []string{imageID, imageTag} {
-		if ref == "" {
-			continue
-		}
-		resp, err := dockerAPI("GET", "/images/"+ref+"/json", nil)
-		if err != nil {
-			continue
-		}
-		var data struct {
-			RepoDigests []string `json:"RepoDigests"`
-		}
-		json.NewDecoder(resp.Body).Decode(&data)
-		resp.Body.Close()
-		for _, d := range data.RepoDigests {
-			_, after, ok := strings.Cut(d, "@")
-			if ok && after == remoteDigest {
-				return true
-			}
+func localDigestMatches(imageID, remoteDigest string) bool {
+	if imageID == "" {
+		return false
+	}
+	resp, err := dockerAPI("GET", "/images/"+imageID+"/json", nil)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	var data struct {
+		RepoDigests []string `json:"RepoDigests"`
+	}
+	json.NewDecoder(resp.Body).Decode(&data)
+	for _, d := range data.RepoDigests {
+		_, after, ok := strings.Cut(d, "@")
+		if ok && after == remoteDigest {
+			return true
 		}
 	}
 	return false
@@ -385,7 +383,6 @@ func recreateContainer(id, image string) error {
 		return fmt.Errorf("marshal create body: %w", err)
 	}
 
-	// stop with 10s grace period (best effort — container may already be stopped)
 	resp, err := dockerAPI("POST", "/containers/"+id+"/stop?t=10", nil)
 	if resp != nil {
 		resp.Body.Close()
@@ -394,21 +391,15 @@ func recreateContainer(id, image string) error {
 		return fmt.Errorf("stop container %s: %w", id, err)
 	}
 	time.Sleep(1 * time.Second)
-	// inspect to confirm stopped, then remove
-	stopped, err := inspectContainer(id)
+
+	resp, err = dockerAPI("DELETE", "/containers/"+id+"?force=true", nil)
+	if resp != nil {
+		resp.Body.Close()
+	}
 	if err != nil {
-		return fmt.Errorf("inspect after stop %s: %w", id, err)
+		return fmt.Errorf("remove container %s: %w", id, err)
 	}
-	if stopped != nil {
-		resp, err = dockerAPI("DELETE", "/containers/"+id, nil)
-		if resp != nil {
-			resp.Body.Close()
-		}
-		if err != nil {
-			return fmt.Errorf("remove container %s: %w", id, err)
-		}
-		time.Sleep(500 * time.Millisecond)
-	}
+	time.Sleep(500 * time.Millisecond)
 	// create
 	resp, err = dockerAPI("POST", "/containers/create?name="+strings.TrimPrefix(inspect.Name, "/"), bytes.NewReader(body))
 	if err != nil {
