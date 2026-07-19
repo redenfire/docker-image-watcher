@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strings"
 	"time"
 )
@@ -140,6 +141,46 @@ func buildRegistryAuthHeader(serverAddress, auth string) (string, error) {
 		return "", err
 	}
 	return base64.StdEncoding.EncodeToString(payload), nil
+}
+
+func validateRegistryAuth() {
+	auth := strings.TrimSpace(os.Getenv("DOCKER_REGISTRY_AUTH"))
+	if auth == "" {
+		return
+	}
+	if strings.HasPrefix(auth, "{") {
+		var authByRegistry map[string]string
+		if err := json.Unmarshal([]byte(auth), &authByRegistry); err != nil {
+			log.Printf("warning: DOCKER_REGISTRY_AUTH JSON parse failed: %v", err)
+			return
+		}
+		registries := make([]string, 0, len(authByRegistry))
+		for registry, creds := range authByRegistry {
+			if registry != strings.TrimSpace(registry) {
+				log.Printf("warning: DOCKER_REGISTRY_AUTH registry key %q has leading or trailing whitespace", registry)
+				return
+			}
+			if creds != strings.TrimSpace(creds) {
+				log.Printf("warning: DOCKER_REGISTRY_AUTH entry for %s has leading or trailing whitespace", registry)
+				return
+			}
+			username, password, ok := strings.Cut(creds, ":")
+			if !ok || username == "" || password == "" {
+				log.Printf("warning: DOCKER_REGISTRY_AUTH entry for %s is not username:password", registry)
+				return
+			}
+			registries = append(registries, registry)
+		}
+		sort.Strings(registries)
+		log.Printf("DOCKER_REGISTRY_AUTH configured for registries: %s", strings.Join(registries, ", "))
+		return
+	}
+	username, password, ok := strings.Cut(auth, ":")
+	if !ok || username == "" || password == "" {
+		log.Printf("warning: DOCKER_REGISTRY_AUTH should be username:password or JSON map")
+		return
+	}
+	log.Printf("DOCKER_REGISTRY_AUTH configured for Docker Hub shorthand auth")
 }
 
 func pullImageStream(image string, progressFn func(PullProgress)) error {
@@ -457,4 +498,5 @@ func init() {
 	if s := os.Getenv("DOCKER_SOCK"); s != "" {
 		dockerSocket = s
 	}
+	validateRegistryAuth()
 }
