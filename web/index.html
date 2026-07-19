@@ -80,6 +80,7 @@ td { font-size: .875rem; font-family: "SFMono-Regular",Consolas,"Liberation Mono
 <script>
 const POLL = 10000;
 let updating = new Set();
+let progressSeen = new Set();
 let showAll = false;
 let rateLimited = false;
 let rateLimitDismissed = false;
@@ -282,6 +283,7 @@ async function toggle(el) {
 async function doUpdate(btn) {
   const cid = btn.dataset.cid;
   updating.add(cid);
+  progressSeen.delete(cid);
   btn.disabled = true;
   const cell = document.getElementById('progress-' + cid);
   cell.innerHTML = '<div class="progress-bar"><div class="bar"><div class="fill" style="width:0%"></div></div><span class="pct">0%</span></div>';
@@ -298,6 +300,7 @@ async function doGroupUpdate(btn) {
   const cids = btn.dataset.cids ? btn.dataset.cids.split(',') : [];
   for (const cid of cids) {
     updating.add(cid);
+    progressSeen.delete(cid);
     const cell = document.getElementById('progress-' + cid);
     if (cell) cell.innerHTML = '<div class="progress-bar"><div class="bar"><div class="fill" style="width:0%"></div></div><span class="pct">0%</span></div>';
   }
@@ -318,6 +321,8 @@ async function doGroupUpdate(btn) {
 
 async function doGlobalUpdate() {
   const btn = document.getElementById('updateAllBtn');
+  const startedCids = [];
+  let outdatedCids = [];
   btn.disabled = true;
   btn.textContent = t.updatingLabel;
   try {
@@ -327,17 +332,53 @@ async function doGlobalUpdate() {
       return;
     }
     const groups = await res.json();
-    for (const g of groups) {
-      const outdated = g.containers.filter(c => c.status === 'outdated');
-      if (outdated.length === 0) continue;
-      await fetch('/api/groups/update', {
+    const outdatedGroups = groups
+      .map(g => ({ image: g.image, containers: g.containers.filter(c => c.status === 'outdated') }))
+      .filter(g => g.containers.length > 0);
+    outdatedCids = outdatedGroups.flatMap(g => g.containers.map(c => c.container_id));
+
+    for (const cid of outdatedCids) {
+      updating.add(cid);
+      progressSeen.delete(cid);
+      const cell = document.getElementById('progress-' + cid);
+      if (cell) cell.innerHTML = '<div class="progress-bar"><div class="bar"><div class="fill" style="width:0%"></div></div><span class="pct">0%</span></div>';
+    }
+
+    for (const g of outdatedGroups) {
+      const updateRes = await fetch('/api/groups/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ image: g.image })
       });
+      if (updateRes.status === 401) {
+        window.location.href = '/login.html';
+        return;
+      }
+      if (!updateRes.ok) {
+        for (const c of g.containers) {
+          updating.delete(c.container_id);
+          progressSeen.delete(c.container_id);
+          const cell = document.getElementById('progress-' + c.container_id);
+          if (cell) cell.innerHTML = esc(t.errorLabel);
+        }
+        continue;
+      }
+      for (const c of g.containers) {
+        startedCids.push(c.container_id);
+        pollProgress(c.container_id);
+      }
     }
+
     setTimeout(load, 2000);
   } catch(e) {
+    const started = new Set(startedCids);
+    for (const cid of outdatedCids) {
+      if (started.has(cid)) continue;
+      updating.delete(cid);
+      progressSeen.delete(cid);
+      const cell = document.getElementById('progress-' + cid);
+      if (cell) cell.innerHTML = esc(t.errorLabel);
+    }
     btn.textContent = t.errorLabel;
   }
 }
@@ -347,17 +388,31 @@ async function pollProgress(cid) {
   if (!cell) return;
   try {
     const res = await fetch(`/api/images/${cid}/progress`);
-    if (!res.ok) { updating.delete(cid); load(); return; }
+    if (!res.ok) {
+      if (res.status === 401) {
+        window.location.href = '/login.html';
+        return;
+      }
+      if (res.status === 404 && updating.has(cid) && !progressSeen.has(cid)) {
+        setTimeout(() => pollProgress(cid), 1000);
+        return;
+      }
+      updating.delete(cid);
+      progressSeen.delete(cid);
+      load();
+      return;
+    }
     const p = await res.json();
+    progressSeen.add(cid);
     if (p.status === 'recreating' || p.status.startsWith('error')) {
       const statusLabel = p.status === 'recreating' ? t.recreating : (p.status.startsWith('error') ? p.status.replace('error: ', t.errorLabel + ': ') : p.status);
       cell.innerHTML = `<div class="progress-bar"><div class="bar"><div class="fill" style="width:${p.percent}%"></div></div><span class="pct">${p.percent}%</span> <span style="color:#94a3b8;font-size:.7rem">${esc(statusLabel)}</span></div>`;
       if (p.status === 'recreating') {
-        setTimeout(() => { updating.delete(cid); load(); }, 1000);
+        setTimeout(() => { updating.delete(cid); progressSeen.delete(cid); load(); }, 1000);
         return;
       }
       if (p.status.startsWith('error')) {
-        updating.delete(cid); load();
+        updating.delete(cid); progressSeen.delete(cid); load();
         return;
       }
     } else if (p.status === 'connecting') {

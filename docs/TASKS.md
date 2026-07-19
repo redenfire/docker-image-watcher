@@ -26,6 +26,32 @@ Each task should include:
 
 ## Active tasks
 
+### TASK-010 — Add registry-auth startup validation and global update progress bars
+
+Status: IN PROGRESS
+
+Goal:
+Add startup-time `DOCKER_REGISTRY_AUTH` validation/logging and show per-container progress bars during global batch updates.
+
+Files likely involved:
+- `docker.go`
+- `web/index.html`
+- `docs/TASKS.md`
+- `docs/STATUS.md`
+
+Checks to run:
+- `go build ./...`
+- `go vet ./...`
+- verify valid simple `DOCKER_REGISTRY_AUTH=username:password` logs confirmation at startup
+- verify invalid simple auth without `:` logs warning at startup
+- verify JSON auth logs configured registry names and warns on parse failure
+- verify `Update all` initializes progress cells for every outdated container before group updates start
+- verify `Update all` polls per-container progress until recreate/error completion
+
+Notes / risks:
+- Startup validation is additive logging only and must not change pull-time auth behavior.
+- Global update still processes groups sequentially and still needs live browser verification.
+
 ### TASK-009 — Fix ghcr.io digest matching and batch update flow
 
 Status: IN PROGRESS

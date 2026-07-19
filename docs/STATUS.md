@@ -20,7 +20,7 @@ Current phase: Implementation
 
 ## Current objective
 
-Complete TASK-007 auth fixes, TASK-008 UI improvements, and TASK-009 ghcr.io update-flow fixes while keeping private Forgejo `main` close to upstream application state.
+Complete TASK-007 auth fixes, TASK-008 UI improvements, TASK-009 ghcr.io update-flow fixes, and TASK-010 registry-auth/global-update UX improvements while keeping private Forgejo `main` close to upstream application state.
 
 ## Working state
 
@@ -45,6 +45,7 @@ Complete TASK-007 auth fixes, TASK-008 UI improvements, and TASK-009 ghcr.io upd
 - TASK-007 implementation is in progress for auth/session correctness issues discovered during review.
 - TASK-008 implementation is in progress for rate-limit banner dismissal, update action cleanup, and status badge polish.
 - TASK-009 implementation is in progress for ghcr.io digest matching and grouped update-flow fixes, with temporary Docker list debug logging added for live validation.
+- TASK-010 implementation is in progress for startup registry-auth validation logging and per-container progress bars during global update runs.
 
 ### What does not work yet
 
@@ -77,8 +78,8 @@ Complete TASK-007 auth fixes, TASK-008 UI improvements, and TASK-009 ghcr.io upd
 ## Last meaningful update
 
 - Date: 2026-07-19
-- Summary: Implemented TASK-009 code changes for ghcr.io digest matching and grouped update sequencing; live Docker validation still pending alongside TASK-007/TASK-008 work.
+- Summary: Implemented TASK-010 code changes for startup registry-auth validation logging and Update All progress-bar initialization; live browser/runtime validation remains pending alongside TASK-007/TASK-009 work.
 
 ## Next action
 
-Validate TASK-009 against live ghcr.io containers, then continue TASK-008 browser verification and TASK-007 auth/session checks before deciding what to upstream.
+Validate TASK-010 startup logs and Update All progress behavior in browser, then continue TASK-009 ghcr.io verification and TASK-007 auth/session checks before deciding what to upstream.
