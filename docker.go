@@ -293,6 +293,35 @@ func getImageDigest(imageID string) (string, error) {
 	return "", fmt.Errorf("no digest found")
 }
 
+func localDigestMatches(imageID, remoteDigest string) (bool, error) {
+	resp, err := dockerAPI("GET", "/images/"+imageID+"/json", nil)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+	var data struct {
+		RepoDigests []string `json:"RepoDigests"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		return false, err
+	}
+	foundDigest := false
+	for _, d := range data.RepoDigests {
+		_, after, ok := strings.Cut(d, "@")
+		if !ok {
+			continue
+		}
+		foundDigest = true
+		if after == remoteDigest {
+			return true, nil
+		}
+	}
+	if !foundDigest {
+		return false, fmt.Errorf("no digest found")
+	}
+	return false, nil
+}
+
 func recreateContainer(id, image string) error {
 	inspect, err := inspectContainer(id)
 	if err != nil {
@@ -356,21 +385,14 @@ func recreateContainer(id, image string) error {
 		return fmt.Errorf("stop container %s: %w", id, err)
 	}
 	time.Sleep(1 * time.Second)
-	// inspect to confirm stopped, then remove
-	stopped, err := inspectContainer(id)
+	resp, err = dockerAPI("DELETE", "/containers/"+id+"?force=true", nil)
+	if resp != nil {
+		resp.Body.Close()
+	}
 	if err != nil {
-		return fmt.Errorf("inspect after stop %s: %w", id, err)
+		return fmt.Errorf("remove container %s: %w", id, err)
 	}
-	if stopped != nil {
-		resp, err = dockerAPI("DELETE", "/containers/"+id, nil)
-		if resp != nil {
-			resp.Body.Close()
-		}
-		if err != nil {
-			return fmt.Errorf("remove container %s: %w", id, err)
-		}
-		time.Sleep(500 * time.Millisecond)
-	}
+	time.Sleep(500 * time.Millisecond)
 	// create
 	resp, err = dockerAPI("POST", "/containers/create?name="+strings.TrimPrefix(inspect.Name, "/"), bytes.NewReader(body))
 	if err != nil {

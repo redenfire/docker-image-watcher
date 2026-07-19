@@ -175,3 +175,19 @@ Files/components affected:
 - `docker.go: pullImageStream, IsRateLimitError`
 - `web/index.html`
 - `memory/LEARNINGS.md`
+
+### 2026-07-19 - RepoDigests order and recreated container IDs can invalidate naive grouped updates
+
+What was learned:
+
+For some images, especially ghcr.io-backed ones, Docker's `RepoDigests` list can contain multiple entries where first digest returned is not reliable enough for direct equality checks against remote digest. Grouped update loops also cannot safely pre-collect container IDs because each recreate produces a new container identity and refreshes app state.
+
+Why it matters:
+
+Status detection should match remote digest against all local repo-digest entries, and grouped update flows should re-read current state after each recreate instead of trusting stale container IDs.
+
+Files/components affected:
+
+- `docker.go: localDigestMatches, recreateContainer`
+- `main.go: checkAll, updateGroup`
+- `memory/LEARNINGS.md`

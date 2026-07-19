@@ -20,7 +20,7 @@ Current phase: Implementation
 
 ## Current objective
 
-Complete TASK-007 auth fixes and TASK-008 UI improvements while keeping private Forgejo `main` close to upstream application state.
+Complete TASK-007 auth fixes, TASK-008 UI improvements, and TASK-009 ghcr.io update-flow fixes while keeping private Forgejo `main` close to upstream application state.
 
 ## Working state
 
@@ -44,6 +44,7 @@ Complete TASK-007 auth fixes and TASK-008 UI improvements while keeping private 
 - Last pull error for a container persists in UI until a later successful pull clears it.
 - TASK-007 implementation is in progress for auth/session correctness issues discovered during review.
 - TASK-008 implementation is in progress for rate-limit banner dismissal, update action cleanup, and status badge polish.
+- TASK-009 implementation is in progress for ghcr.io digest matching and grouped update-flow fixes, with temporary Docker list debug logging added for live validation.
 
 ### What does not work yet
 
@@ -75,9 +76,9 @@ Complete TASK-007 auth fixes and TASK-008 UI improvements while keeping private 
 
 ## Last meaningful update
 
-- Date: 2026-07-04
-- Summary: Started TASK-008 UI improvements for banner dismissal, global update action, and status badge readability while TASK-007 auth fixes remain active.
+- Date: 2026-07-19
+- Summary: Implemented TASK-009 code changes for ghcr.io digest matching and grouped update sequencing; live Docker validation still pending alongside TASK-007/TASK-008 work.
 
 ## Next action
 
-Validate TASK-008 UI behavior in browser, then continue TASK-007 and TASK-008 completion/verification before deciding what to upstream.
+Validate TASK-009 against live ghcr.io containers, then continue TASK-008 browser verification and TASK-007 auth/session checks before deciding what to upstream.

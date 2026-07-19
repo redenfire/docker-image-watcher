@@ -444,21 +444,53 @@ func (app *App) handleGroupAction(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *App) updateGroup(image string) {
+	seen := make(map[string]struct{})
+	count := 0
+
 	app.mu.RLock()
-	var cids []string
 	for _, g := range app.images {
-		if g.Image == image {
-			for _, c := range g.Containers {
-				cids = append(cids, c.ContainerID)
-			}
-			break
+		if g.Image != image {
+			continue
 		}
+		for _, c := range g.Containers {
+			if c.Status == "outdated" {
+				count++
+			}
+		}
+		break
 	}
 	app.mu.RUnlock()
 
-	log.Printf("updating group %s (%d containers)", image, len(cids))
-	for _, cid := range cids {
-		app.updateContainer(cid)
+	log.Printf("updating group %s (%d containers)", image, count)
+	for {
+		nextCID := ""
+		nextName := ""
+		app.mu.RLock()
+		for _, g := range app.images {
+			if g.Image != image {
+				continue
+			}
+			for _, c := range g.Containers {
+				if c.Status != "outdated" {
+					continue
+				}
+				if _, ok := seen[c.ContainerName]; ok {
+					continue
+				}
+				nextCID = c.ContainerID
+				nextName = c.ContainerName
+				break
+			}
+			break
+		}
+		app.mu.RUnlock()
+
+		if nextCID == "" {
+			return
+		}
+
+		seen[nextName] = struct{}{}
+		app.updateContainer(nextCID)
 	}
 }
 
@@ -490,6 +522,7 @@ func (app *App) checkAll() {
 		if app.selfCID != "" && c.ID[:12] == app.selfCID {
 			continue
 		}
+		log.Printf("DEBUG list cid=%s image_raw=[%s] imageID=[%s]", c.ID[:12], c.Image, c.ImageID)
 		cleanImage := c.Image
 		if i := strings.Index(cleanImage, "@"); i >= 0 {
 			cleanImage = cleanImage[:i]
@@ -505,7 +538,7 @@ func (app *App) checkAll() {
 			cid:      c.ID[:12],
 			name:     entryName,
 			imgID:    c.ImageID,
-			imageTag: c.Image,
+			imageTag: cleanImage,
 		})
 	}
 
@@ -552,13 +585,21 @@ func (app *App) checkAll() {
 				if localErr != nil {
 					localDigest, localErr = getLocalDigest(e.imageTag)
 				}
+				matchesRemote := false
+				matchErr := error(nil)
+				if remoteErr == nil {
+					matchesRemote, matchErr = localDigestMatches(e.imgID, remoteDigest)
+					if matchErr != nil {
+						matchesRemote, matchErr = localDigestMatches(e.imageTag, remoteDigest)
+					}
+				}
 				if localErr != nil {
 					item.LocalDigest = "unknown"
 					item.Status = "unknown"
-				} else if remoteErr != nil {
+				} else if remoteErr != nil || matchErr != nil {
 					item.LocalDigest = shortenDigest(localDigest)
 					item.Status = "unknown"
-				} else if localDigest != remoteDigest {
+				} else if !matchesRemote {
 					item.LocalDigest = shortenDigest(localDigest)
 					item.Status = "outdated"
 					gOutdated++

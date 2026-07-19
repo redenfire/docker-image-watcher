@@ -26,6 +26,31 @@ Each task should include:
 
 ## Active tasks
 
+### TASK-009 — Fix ghcr.io digest matching and batch update flow
+
+Status: IN PROGRESS
+
+Goal:
+Fix upstream-divergence issues that misclassify some ghcr.io-backed images and can break grouped update runs after container recreation.
+
+Files likely involved:
+- `docker.go`
+- `main.go`
+- `docs/TASKS.md`
+- `docs/STATUS.md`
+- `memory/LEARNINGS.md`
+
+Checks to run:
+- `go build ./...`
+- `go vet ./...`
+- `gofmt -w main.go docker.go` produces no semantic changes beyond formatting
+- verify ghcr.io-backed groups no longer show false outdated state when another repo digest already matches remote digest
+- verify grouped update continues across recreated containers with refreshed `app.images` state
+
+Notes / risks:
+- Temporary debug logging was added in `checkAll` to capture raw Docker list image values during live verification.
+- Live Docker verification is still required to confirm exact ghcr.io image naming behavior.
+
 ### TASK-008 — UI improvements for rate-limit banner, update buttons, and status badges
 
 Status: IN PROGRESS
