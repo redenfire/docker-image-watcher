@@ -296,7 +296,7 @@ func getImageDigest(imageID string) (string, error) {
 	return "", fmt.Errorf("no digest found")
 }
 
-func localDigestMatches(imageID, remoteDigest string) bool {
+func localDigestMatches(imageID string, remoteDigests ...string) bool {
 	if imageID == "" {
 		return false
 	}
@@ -308,11 +308,18 @@ func localDigestMatches(imageID, remoteDigest string) bool {
 	var data struct {
 		RepoDigests []string `json:"RepoDigests"`
 	}
-	json.NewDecoder(resp.Body).Decode(&data)
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		return false
+	}
 	for _, d := range data.RepoDigests {
 		_, after, ok := strings.Cut(d, "@")
-		if ok && after == remoteDigest {
-			return true
+		if !ok {
+			continue
+		}
+		for _, remoteDigest := range remoteDigests {
+			if after == remoteDigest {
+				return true
+			}
 		}
 	}
 	return false

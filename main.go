@@ -541,7 +541,7 @@ func (app *App) checkAll() {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			remoteDigest, remoteErr := getRemoteDigest(imageName)
+			remoteDigest, remoteDigests, remoteErr := getRemoteDigestCandidates(imageName)
 			remoteStr := "unknown"
 			if remoteErr == nil {
 				remoteStr = shortenDigest(remoteDigest)
@@ -569,7 +569,7 @@ func (app *App) checkAll() {
 				} else if remoteErr != nil {
 					item.LocalDigest = shortenDigest(localDigest)
 					item.Status = "unknown"
-				} else if !localDigestMatches(e.imgID, remoteDigest) {
+				} else if !localDigestMatches(e.imgID, remoteDigests...) && !localDigestMatches(e.imageTag, remoteDigests...) {
 					item.LocalDigest = shortenDigest(localDigest)
 					item.Status = "outdated"
 					gOutdated++
