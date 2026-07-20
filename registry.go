@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"os"
 	"regexp"
-	"runtime"
 	"strings"
 	"time"
 )
@@ -53,57 +52,7 @@ func getRemoteDigest(image string) (string, error) {
 }
 
 func resolveManifest(digest string, body []byte, headers http.Header, registry, repo, token string) (string, error) {
-	ct := headers.Get("Content-Type")
-	if ct != "application/vnd.docker.distribution.manifest.list.v2+json" && ct != "application/vnd.oci.image.index.v1+json" {
-		return digest, nil
-	}
-	return resolvePlatformDigest(body, registry, repo, token)
-}
-
-type manifestListEntry struct {
-	Digest   string `json:"digest"`
-	Platform struct {
-		Architecture string `json:"architecture"`
-		OS           string `json:"os"`
-	} `json:"platform"`
-}
-
-type manifestList struct {
-	Manifests []manifestListEntry `json:"manifests"`
-}
-
-func resolvePlatformDigest(body []byte, registry, repo, token string) (string, error) {
-	var list manifestList
-	if err := json.Unmarshal(body, &list); err != nil {
-		return "", fmt.Errorf("parse manifest list: %w", err)
-	}
-	arch, os := runtime.GOARCH, runtime.GOOS
-	for _, m := range list.Manifests {
-		if m.Platform.Architecture == arch && m.Platform.OS == os {
-			platURL := fmt.Sprintf("https://%s/v2/%s/manifests/%s", registry, repo, m.Digest)
-			d, _, code, headers, err := fetchManifest(platURL, token, registry)
-			if err != nil {
-				return "", err
-			}
-			if code == 200 {
-				return d, nil
-			}
-			if code == 401 && token == "" {
-				authHeader := headers.Get("Www-Authenticate")
-				t, err := getToken(authHeader, registry, repo)
-				if err != nil {
-					return "", fmt.Errorf("auth: %w", err)
-				}
-				d, _, _, _, err = fetchManifest(platURL, t, registry)
-				if err != nil {
-					return "", err
-				}
-				return d, nil
-			}
-			return "", fmt.Errorf("registry returned %d for platform manifest", code)
-		}
-	}
-	return "", fmt.Errorf("no manifest for %s/%s", os, arch)
+	return digest, nil
 }
 
 func fetchManifest(manifestURL, token, registry string) (digest string, body []byte, code int, headers http.Header, err error) {
