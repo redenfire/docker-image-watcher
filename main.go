@@ -511,6 +511,7 @@ func (app *App) checkAll() {
 		if len(c.Names) > 0 {
 			entryName = strings.TrimPrefix(c.Names[0], "/")
 		}
+		log.Printf("DEBUG checkAll group-input cid=%s container=%q image_raw=%q image_clean=%q image_id=%q", c.ID[:12], entryName, c.Image, cleanImage, c.ImageID)
 		groups[cleanImage] = append(groups[cleanImage], groupEntry{
 			cid:      c.ID[:12],
 			name:     entryName,
@@ -582,6 +583,7 @@ func (app *App) checkAll() {
 				if e.labels["image-watch.auto-update"] == "true" {
 					item.AutoUpdate = true
 				}
+				log.Printf("DEBUG checkAll item cid=%s container=%q group_image=%q image_tag=%q image_id=%q local_digest=%q remote_digest=%q local_err=%v remote_err=%v status=%q auto=%t", e.cid, e.name, imageName, e.imageTag, e.imgID, item.LocalDigest, remoteStr, localErr, remoteErr, item.Status, item.AutoUpdate)
 				app.mu.RLock()
 				item.Error = app.containerErrors[e.cid]
 				app.mu.RUnlock()
@@ -599,6 +601,7 @@ func (app *App) checkAll() {
 				gStatus = "unknown"
 			}
 
+			log.Printf("DEBUG checkAll group-result image=%q remote_digest=%q status=%q containers=%d uptodate=%d outdated=%d", imageName, remoteStr, gStatus, len(containers), gUpToDate, gOutdated)
 			resultsCh <- ImageGroup{
 				Image:        imageName,
 				RemoteDigest: remoteStr,
@@ -645,6 +648,7 @@ func (app *App) checkAll() {
 					app.cooldowns[c.ContainerID] = time.Now()
 				}
 				app.mu.Unlock()
+				log.Printf("DEBUG auto-update candidate cid=%s container=%q image=%q cooldown=%t last_seen=%t auto=%t status=%q", c.ContainerID, c.ContainerName, g.Image, cooldown, ok, c.AutoUpdate, c.Status)
 				if cooldown {
 					log.Printf("auto-updating %s (%s)", c.ContainerName, g.Image)
 					app.updateContainer(c.ContainerID)
@@ -670,9 +674,11 @@ func (app *App) updateContainer(cid string) {
 	app.mu.RUnlock()
 
 	if image == "" {
+		log.Printf("DEBUG updateContainer cid=%s image lookup returned empty", cid)
 		return
 	}
 
+	log.Printf("DEBUG updateContainer cid=%s container=%q image=%q", cid, containerName, image)
 	app.progress.Store(cid, PullProgress{Status: "connecting", Layer: "..."})
 	if err := pullImageStream(image, func(p PullProgress) {
 		app.progress.Store(cid, p)
@@ -692,6 +698,7 @@ func (app *App) updateContainer(cid string) {
 	delete(app.containerErrors, cid)
 	app.mu.Unlock()
 	app.progress.Store(cid, PullProgress{Status: "recreating", Percent: 100})
+	log.Printf("DEBUG updateContainer cid=%s recreate image=%q", cid, image)
 	if err := recreateContainer(cid, image); err != nil {
 		app.mu.Lock()
 		app.containerErrors[cid] = err.Error()
