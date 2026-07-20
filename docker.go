@@ -191,6 +191,9 @@ func pullImageStream(image string, progressFn func(PullProgress)) error {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	auth := strings.TrimSpace(os.Getenv("DOCKER_REGISTRY_AUTH"))
+	authMode := "none"
+	authAlias := ""
+	authHeaderSet := false
 	if auth != "" {
 		registry := ""
 		if host, _, _, ok := parseImage(image); ok {
@@ -200,11 +203,13 @@ func pullImageStream(image string, progressFn func(PullProgress)) error {
 		header := ""
 		var authByRegistry map[string]string
 		if strings.HasPrefix(auth, "{") {
+			authMode = "json"
 			if err := json.Unmarshal([]byte(auth), &authByRegistry); err != nil {
 				return fmt.Errorf("registry auth: invalid JSON auth map: %w", err)
 			}
 			for _, alias := range aliases {
 				if creds, ok := authByRegistry[alias]; ok && strings.TrimSpace(creds) != "" {
+					authAlias = alias
 					header, err = buildRegistryAuthHeader(alias, creds)
 					if err != nil {
 						return fmt.Errorf("registry auth: %w", err)
@@ -213,8 +218,10 @@ func pullImageStream(image string, progressFn func(PullProgress)) error {
 				}
 			}
 		} else {
+			authMode = "dockerhub-shorthand"
 			for _, alias := range aliases {
 				if alias == "https://index.docker.io/v1/" {
+					authAlias = alias
 					header, err = buildRegistryAuthHeader(alias, auth)
 					if err != nil {
 						return fmt.Errorf("registry auth: %w", err)
@@ -224,9 +231,11 @@ func pullImageStream(image string, progressFn func(PullProgress)) error {
 			}
 		}
 		if header != "" {
+			authHeaderSet = true
 			req.Header.Set("X-Registry-Auth", header)
 		}
 	}
+	log.Printf("DEBUG pullImageStream image=%q auth_mode=%s auth_alias=%q auth_header_set=%t", image, authMode, authAlias, authHeaderSet)
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("pull request: %w", err)
@@ -365,6 +374,7 @@ func localDigestMatches(imageID, remoteDigest string) (bool, error) {
 }
 
 func recreateContainer(id, image string) error {
+	log.Printf("DEBUG recreateContainer cid=%s image_param=%q", id, image)
 	inspect, err := inspectContainer(id)
 	if err != nil {
 		return fmt.Errorf("inspect: %w", err)
@@ -413,6 +423,7 @@ func recreateContainer(id, image string) error {
 		createBody["NetworkingConfig"] = netConfig
 	}
 
+	log.Printf("DEBUG recreateContainer cid=%s inspect_name=%q create_image=%q", id, inspect.Name, createBody["Image"])
 	body, err := json.Marshal(createBody)
 	if err != nil {
 		return fmt.Errorf("marshal create body: %w", err)
