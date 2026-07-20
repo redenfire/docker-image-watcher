@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"os"
 	"regexp"
 	"runtime"
 	"strings"
@@ -23,7 +25,7 @@ func getRemoteDigest(image string) (string, error) {
 
 	baseURL := fmt.Sprintf("https://%s/v2/%s/manifests/%s", registry, repo, tag)
 
-	digest, body, code, headers, err := fetchManifest(baseURL, "")
+	digest, body, code, headers, err := fetchManifest(baseURL, "", registry)
 	if err != nil {
 		return "", err
 	}
@@ -40,7 +42,7 @@ func getRemoteDigest(image string) (string, error) {
 		return "", fmt.Errorf("auth: %w", err)
 	}
 
-	digest, body, code, headers, err = fetchManifest(baseURL, token)
+	digest, body, code, headers, err = fetchManifest(baseURL, token, registry)
 	if err != nil {
 		return "", err
 	}
@@ -79,7 +81,7 @@ func resolvePlatformDigest(body []byte, registry, repo, token string) (string, e
 	for _, m := range list.Manifests {
 		if m.Platform.Architecture == arch && m.Platform.OS == os {
 			platURL := fmt.Sprintf("https://%s/v2/%s/manifests/%s", registry, repo, m.Digest)
-			d, _, code, headers, err := fetchManifest(platURL, token)
+			d, _, code, headers, err := fetchManifest(platURL, token, registry)
 			if err != nil {
 				return "", err
 			}
@@ -92,7 +94,7 @@ func resolvePlatformDigest(body []byte, registry, repo, token string) (string, e
 				if err != nil {
 					return "", fmt.Errorf("auth: %w", err)
 				}
-				d, _, _, _, err = fetchManifest(platURL, t)
+				d, _, _, _, err = fetchManifest(platURL, t, registry)
 				if err != nil {
 					return "", err
 				}
@@ -104,13 +106,15 @@ func resolvePlatformDigest(body []byte, registry, repo, token string) (string, e
 	return "", fmt.Errorf("no manifest for %s/%s", os, arch)
 }
 
-func fetchManifest(url, token string) (digest string, body []byte, code int, headers http.Header, err error) {
-	req, err := http.NewRequest("GET", url, nil)
+func fetchManifest(manifestURL, token, registry string) (digest string, body []byte, code int, headers http.Header, err error) {
+	req, err := http.NewRequest("GET", manifestURL, nil)
 	if err != nil {
 		return "", nil, 0, nil, err
 	}
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
+	} else if err := setRegistryBasicAuth(req, registry); err != nil {
+		return "", nil, 0, nil, err
 	}
 	req.Header.Set("Accept", "application/vnd.docker.distribution.manifest.v2+json,application/vnd.oci.image.manifest.v1+json,application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json")
 
@@ -126,8 +130,73 @@ func fetchManifest(url, token string) (digest string, body []byte, code int, hea
 	return resp.Header.Get("Docker-Content-Digest"), body, resp.StatusCode, resp.Header, nil
 }
 
+func getRegistryBasicAuth(registry string) (username, password string, ok bool, err error) {
+	auth := strings.TrimSpace(os.Getenv("DOCKER_REGISTRY_AUTH"))
+	if auth == "" {
+		return "", "", false, nil
+	}
+
+	if strings.HasPrefix(auth, "{") {
+		var authByRegistry map[string]string
+		if err := json.Unmarshal([]byte(auth), &authByRegistry); err != nil {
+			return "", "", false, fmt.Errorf("invalid DOCKER_REGISTRY_AUTH JSON: %w", err)
+		}
+		for _, alias := range registryAliases(registry) {
+			creds := authByRegistry[alias]
+			if creds == "" {
+				continue
+			}
+			username, password, ok := strings.Cut(creds, ":")
+			if !ok || username == "" || password == "" {
+				return "", "", false, fmt.Errorf("invalid DOCKER_REGISTRY_AUTH credentials for %s", alias)
+			}
+			return username, password, true, nil
+		}
+		return "", "", false, nil
+	}
+
+	isDockerHub := false
+	for _, alias := range registryAliases(registry) {
+		if alias == "https://index.docker.io/v1/" {
+			isDockerHub = true
+			break
+		}
+	}
+	if !isDockerHub {
+		return "", "", false, nil
+	}
+
+	username, password, ok = strings.Cut(auth, ":")
+	if !ok || username == "" || password == "" {
+		return "", "", false, fmt.Errorf("invalid DOCKER_REGISTRY_AUTH shorthand credentials")
+	}
+	return username, password, true, nil
+}
+
+func setRegistryBasicAuth(req *http.Request, registry string) error {
+	username, password, ok, err := getRegistryBasicAuth(registry)
+	if err != nil || !ok {
+		return err
+	}
+	req.SetBasicAuth(username, password)
+	return nil
+}
+
+func buildTokenURL(realm, service, scope string) (string, error) {
+	u, err := url.Parse(realm)
+	if err != nil {
+		return "", err
+	}
+	q := u.Query()
+	q.Set("scope", scope)
+	if service != "" {
+		q.Set("service", service)
+	}
+	u.RawQuery = q.Encode()
+	return u.String(), nil
+}
+
 func getToken(authHeader, registry, repo string) (string, error) {
-	// parse WWW-Authenticate header
 	matches := authRe.FindStringSubmatch(authHeader)
 	if len(matches) >= 2 && matches[1] != "" {
 		realm := matches[1]
@@ -136,36 +205,64 @@ func getToken(authHeader, registry, repo string) (string, error) {
 		if scope == "" {
 			scope = "repository:" + repo + ":pull"
 		}
-		url := realm + "?scope=" + scope
-		if service != "" {
-			url += "&service=" + service
+		tokenURL, err := buildTokenURL(realm, service, scope)
+		if err != nil {
+			return "", err
 		}
-		resp, err := httpClient.Get(url)
+		req, err := http.NewRequest("GET", tokenURL, nil)
+		if err != nil {
+			return "", err
+		}
+		if err := setRegistryBasicAuth(req, registry); err != nil {
+			return "", err
+		}
+		resp, err := httpClient.Do(req)
 		if err != nil {
 			return "", err
 		}
 		defer resp.Body.Close()
+		if resp.StatusCode != 200 {
+			return "", fmt.Errorf("token endpoint returned %d", resp.StatusCode)
+		}
 		var data struct {
 			Token string `json:"token"`
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
 			return "", err
 		}
+		if data.Token == "" {
+			return "", fmt.Errorf("token endpoint returned empty token")
+		}
 		return data.Token, nil
 	}
 
-	// fallback: Docker Hub-style token endpoint
-	url := fmt.Sprintf("https://auth.docker.io/token?service=registry.docker.io&scope=repository:%s:pull", repo)
-	resp, err := httpClient.Get(url)
+	tokenURL, err := buildTokenURL("https://auth.docker.io/token", "registry.docker.io", "repository:"+repo+":pull")
+	if err != nil {
+		return "", err
+	}
+	req, err := http.NewRequest("GET", tokenURL, nil)
+	if err != nil {
+		return "", err
+	}
+	if err := setRegistryBasicAuth(req, registry); err != nil {
+		return "", err
+	}
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return "", fmt.Errorf("token endpoint returned %d", resp.StatusCode)
+	}
 	var data struct {
 		Token string `json:"token"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
 		return "", err
+	}
+	if data.Token == "" {
+		return "", fmt.Errorf("token endpoint returned empty token")
 	}
 	return data.Token, nil
 }
