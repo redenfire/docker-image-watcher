@@ -208,6 +208,7 @@ type ContainerItem struct {
 type ImageGroup struct {
 	Image        string          `json:"image"`
 	RemoteDigest string          `json:"remote_digest"`
+	RemoteError  string          `json:"remote_error,omitempty"`
 	Status       string          `json:"status"`
 	Containers   []ContainerItem `json:"containers"`
 }
@@ -564,12 +565,17 @@ func (app *App) checkAll() {
 
 			remoteDigest, remoteErr := getRemoteDigest(imageName)
 			remoteStr := "unknown"
+			remoteErrStr := ""
 			if remoteErr == nil {
 				remoteStr = shortenDigest(remoteDigest)
-			} else if IsRateLimitError(remoteErr) {
-				rateLimitMu.Lock()
-				sawRateLimit = true
-				rateLimitMu.Unlock()
+			} else {
+				remoteErrStr = remoteErr.Error()
+				log.Printf("check %s: remote digest error: %v", imageName, remoteErr)
+				if IsRateLimitError(remoteErr) {
+					rateLimitMu.Lock()
+					sawRateLimit = true
+					rateLimitMu.Unlock()
+				}
 			}
 
 			var containers []ContainerItem
@@ -631,6 +637,7 @@ func (app *App) checkAll() {
 			resultsCh <- ImageGroup{
 				Image:        imageName,
 				RemoteDigest: remoteStr,
+				RemoteError:  remoteErrStr,
 				Status:       gStatus,
 				Containers:   containers,
 			}
